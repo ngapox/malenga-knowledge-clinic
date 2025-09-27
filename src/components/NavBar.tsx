@@ -44,6 +44,7 @@ export default function NavBar() {
           {email ? (
             <>
               <span className="hidden sm:inline text-gray-500">{email}</span>
+              <Link href="/profile" className="hover:underline">Profile</Link>
               <button onClick={signOut} className="rounded-lg border px-3 py-1 hover:bg-gray-50">
                 Sign out
               </button>
