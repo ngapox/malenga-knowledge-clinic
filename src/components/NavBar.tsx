@@ -6,19 +6,31 @@ import { supabase } from '@/lib/supabaseClient';
 
 export default function NavBar() {
   const [email, setEmail] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   useEffect(() => {
     let mounted = true;
 
-    // initial check
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!mounted) return;
+    async function hydrate() {
+      const { data: { user } } = await supabase.auth.getUser();
       setEmail(user?.email ?? null);
-    });
+      if (user?.id) {
+        const { data } = await supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
+        if (mounted) setIsAdmin(Boolean(data?.is_admin));
+      }
+    }
+    hydrate();
 
-    // keep in sync
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setEmail(session?.user?.email ?? null);
+      const u = session?.user ?? null;
+      setEmail(u?.email ?? null);
+      if (u?.id) {
+        supabase.from('profiles').select('is_admin').eq('id', u.id).maybeSingle().then(({ data }) => {
+          if (mounted) setIsAdmin(Boolean(data?.is_admin));
+        });
+      } else {
+        setIsAdmin(false);
+      }
     });
 
     return () => {
@@ -29,7 +41,7 @@ export default function NavBar() {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/'; // back to home after sign-out
+    window.location.href = '/';
   };
 
   return (
@@ -40,11 +52,11 @@ export default function NavBar() {
           <Link href="/" className="hover:underline">Home</Link>
           <Link href="/chat" className="hover:underline">Chat</Link>
           <Link href="/calculators/bond" className="hover:underline">Calculator</Link>
-
+          {isAdmin && <Link href="/admin" className="hover:underline">Admin</Link>}
           {email ? (
             <>
-              <span className="hidden sm:inline text-gray-500">{email}</span>
               <Link href="/profile" className="hover:underline">Profile</Link>
+              <span className="hidden sm:inline text-gray-500">{email}</span>
               <button onClick={signOut} className="rounded-lg border px-3 py-1 hover:bg-gray-50">
                 Sign out
               </button>
