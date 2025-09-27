@@ -1,21 +1,27 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function AuthPage() {
   const router = useRouter();
+  const params = useSearchParams();
+  const next = params.get('next') || '/chat';
 
-  // When the session is set by the magic link, move to /chat
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') router.push('/chat');
+      if (event === 'SIGNED_IN') router.push(next);
     });
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [router, next]);
+
+  const redirectTo =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/auth${next ? `?next=${encodeURIComponent(next)}` : ''}`
+      : undefined;
 
   return (
     <main className="mx-auto max-w-md p-6">
@@ -23,9 +29,8 @@ export default function AuthPage() {
       <Auth
         supabaseClient={supabase}
         appearance={{ theme: ThemeSupa }}
-        providers={[]}
-        // ✅ IMPORTANT: send magic-link back to /auth
-        redirectTo={typeof window !== 'undefined' ? `${window.location.origin}/auth` : undefined}
+        providers={['google']}
+        redirectTo={redirectTo}
       />
     </main>
   );
