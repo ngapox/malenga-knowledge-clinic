@@ -77,20 +77,25 @@ export default function AdminPage() {
   };
 
   const createRoom = async () => {
-    if (!newRoomName.trim() || !userId) return;
+  if (!newRoomName.trim() || !userId) return;
     const { data, error } = await supabase.from('rooms')
-      .insert({ name: newRoomName.trim(), is_public: false, created_by: userId })
-      .select(`
+        .insert({ name: newRoomName.trim(), is_public: false, created_by: userId })
+        .select(`
         id, name, is_public,
         room_settings ( room_id, notice, admins_only_post, slow_mode_seconds ),
         room_invites ( token, created_at, expires_at )
-      `)
-      .single();
-    if (!error && data) {
-      setRooms(prev => [...prev, data as unknown as Room].sort((a,b) => a.name.localeCompare(b.name)));
-      setNewRoomName('');
+        `)
+        .single();
+
+    if (error) {
+        alert(error.message);               // <-- show why it failed
+        return;
     }
-  };
+
+    setRooms(prev => [...prev, data as any].sort((a,b) => a.name.localeCompare(b.name)));
+    setNewRoomName('');
+ };
+
 
   const deleteRoom = async (r: Room) => {
     if (!confirm(`Delete room "${r.name}"? This removes its messages too.`)) return;
