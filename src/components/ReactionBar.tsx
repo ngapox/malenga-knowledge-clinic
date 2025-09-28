@@ -1,33 +1,28 @@
 'use client';
 
-type ReactionsForMessage = Record<string, { count: number; me: boolean }>;
-
-const EMOJIS = ['👍', '❤️', '🎉', '🚀', '🙏'];
-
-export default function ReactionBar({
-  reactions,
-  onToggle,
-}: {
-  reactions: ReactionsForMessage | undefined;
+type ReactionEntry = { count: number; me: boolean };
+type Props = {
+  reactions?: Record<string, ReactionEntry>;
   onToggle: (emoji: string) => void;
-}) {
+};
+
+const EMOJIS = ['👍','❤️','🔥','🎉','💡'];
+
+export default function ReactionBar({ reactions, onToggle }: Props) {
   return (
-    <div className="mt-1 flex flex-wrap gap-2">
+    <div className="mt-2 flex flex-wrap items-center gap-2">
       {EMOJIS.map((e) => {
-        const info = reactions?.[e];
-        const count = info?.count ?? 0;
-        const mine = info?.me ?? false;
+        const entry = reactions?.[e];
         return (
           <button
             key={e}
-            type="button"
             onClick={() => onToggle(e)}
-            className={`rounded-full border px-2 py-0.5 text-sm leading-6 ${
-              mine ? 'border-black bg-black text-white' : 'border-gray-300 hover:bg-gray-50'
+            className={`rounded-full border px-2 py-0.5 text-xs ${
+              entry?.me ? 'bg-black text-white' : 'bg-white'
             }`}
-            title={mine ? 'Remove reaction' : 'Add reaction'}
+            title={entry?.count ? `${entry.count}` : '0'}
           >
-            {e} {count > 0 ? count : ''}
+            {e} {entry?.count ? entry.count : ''}
           </button>
         );
       })}
