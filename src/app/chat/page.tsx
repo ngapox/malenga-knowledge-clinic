@@ -61,6 +61,9 @@ export default function ChatPage() {
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.from('rooms').select('*').order('name');
+      if (error) {
+        console.error('rooms select error:', error.message);   
+      }
       if (!error && data) {
         setRooms(data as Room[]);
         if (!activeRoom && data.length > 0) setActiveRoom(data[0] as Room);
@@ -77,7 +80,16 @@ export default function ChatPage() {
         .from('room_members')
         .select('user_id, profiles(full_name)')
         .eq('room_id', activeRoom.id);
-      if (!error && data) setMembers(data as Member[]);
+      if (!error && data) {
+        setMembers(
+          (data as any[]).map((row) => ({
+            user_id: row.user_id,
+            profiles: Array.isArray(row.profiles)
+              ? row.profiles[0] || null
+              : row.profiles ?? null,
+          }))
+        );
+      }
     })();
   }, [activeRoom]);
 
