@@ -1,43 +1,59 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
+type NavItem = { href: string; label: string };
+
 export default function NavBar() {
-  const [email, setEmail] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const pathname = usePathname();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
+  // session
   useEffect(() => {
-    let mounted = true;
-
-    async function hydrate() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setEmail(user?.email ?? null);
-      if (user?.id) {
-        const { data } = await supabase.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
-        if (mounted) setIsAdmin(Boolean(data?.is_admin));
-      }
-    }
-    hydrate();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const u = session?.user ?? null;
-      setEmail(u?.email ?? null);
-      if (u?.id) {
-        supabase.from('profiles').select('is_admin').eq('id', u.id).maybeSingle().then(({ data }) => {
-          if (mounted) setIsAdmin(Boolean(data?.is_admin));
-        });
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      const uid = session?.user?.id ?? null;
+      setUserId(uid);
+      if (uid) {
+        supabase
+          .from('profiles')
+          .select('is_admin')
+          .eq('id', uid)
+          .maybeSingle()
+          .then(({ data }) => setIsAdmin(Boolean(data?.is_admin)));
       } else {
         setIsAdmin(false);
       }
     });
-
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, session) => {
+      const uid = session?.user?.id ?? null;
+      setUserId(uid);
+      if (!uid) setIsAdmin(false);
+    });
     return () => {
-      mounted = false;
+      cancelled = true;
       subscription.unsubscribe();
     };
   }, []);
+
+  const baseItems: NavItem[] = [
+    { href: '/', label: 'Home' },
+    { href: '/chat', label: 'Chatrooms' },
+    { href: '/watchlist', label: 'Watchlist' },      // ← NEW
+    { href: '/calculators/bond', label: 'Bond Calc' },
+    { href: '/profile', label: 'Profile' },
+  ];
+  const items = isAdmin ? [...baseItems, { href: '/admin', label: 'Admin' }] : baseItems;
+
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/';
+    return pathname === href || pathname.startsWith(href + '/');
+  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -45,29 +61,46 @@ export default function NavBar() {
   };
 
   return (
-    <header className="border-b bg-white/80 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between p-3">
-        <Link href="/" className="font-semibold">Malenga</Link>
-        <nav className="flex items-center gap-4 text-sm">
-          <Link href="/" className="hover:underline">Home</Link>
-          <Link href="/chat" className="hover:underline">Chat</Link>
-          <Link href="/calculators/bond" className="hover:underline">Calculator</Link>
-          {isAdmin && <Link href="/admin" className="hover:underline">Admin</Link>}
-          {email ? (
-            <>
-              <Link href="/profile" className="hover:underline">Profile</Link>
-              <span className="hidden sm:inline text-gray-500">{email}</span>
-              <button onClick={signOut} className="rounded-lg border px-3 py-1 hover:bg-gray-50">
-                Sign out
-              </button>
-            </>
+    <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+        <div className="text-lg font-semibold">
+          <Link href="/">Malenga Knowledge Clinic</Link>
+        </div>
+
+        <ul className="flex flex-wrap items-center gap-3 text-sm">
+          {items.map((it) => (
+            <li key={it.href}>
+              <Link
+                href={it.href}
+                className={`rounded-md px-3 py-1.5 hover:bg-gray-100 ${
+                  isActive(it.href) ? 'bg-gray-100 font-medium' : ''
+                }`}
+              >
+                {it.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex items-center gap-2">
+          {userId ? (
+            <button
+              onClick={signOut}
+              className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+              title="Sign out"
+            >
+              Sign out
+            </button>
           ) : (
-            <Link href="/auth" className="rounded-lg border px-3 py-1 hover:bg-gray-50">
+            <Link
+              href="/auth"
+              className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+            >
               Sign in
             </Link>
           )}
-        </nav>
-      </div>
+        </div>
+      </nav>
     </header>
   );
 }
