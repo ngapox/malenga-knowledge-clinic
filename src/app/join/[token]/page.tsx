@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Session } from '@supabase/supabase-js';
+import { type NextPage } from 'next'; // Import Next.js type
 
 // This is now a pure client component that receives a simple string prop.
 function JoinClientComponent({ token }: { token: string }) {
@@ -49,9 +50,13 @@ function JoinClientComponent({ token }: { token: string }) {
   );
 }
 
-// This is the actual page component. It is now very simple.
-export default function JoinByTokenPage({ params }: { params: { token: string } }) {
-  // It receives the complex server props and passes ONLY the necessary data
-  // down to the client component.
-  return <JoinClientComponent token={params.token} />;
+// Explicitly type the page component using NextPage
+interface JoinPageProps {
+  params: { token: string };
 }
+
+const JoinByTokenPage: NextPage<JoinPageProps> = ({ params }) => {
+  return <JoinClientComponent token={params.token} />;
+};
+
+export default JoinByTokenPage;
