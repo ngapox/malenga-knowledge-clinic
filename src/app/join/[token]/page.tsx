@@ -1,51 +1,62 @@
-// src/app/join/[token]/page.tsx
-import React from "react";
+'use client'; // This directive must be at the top
 
-type Props = {
-  params: {
-    token: string;
-  };
-};
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+import { Session } from '@supabase/supabase-js';
 
-// Server component (default under app/). Keeps the shape Next expects.
-export default async function Page({ params }: Props) {
-  const { token } = params;
+// This is now a pure client component that receives a simple string prop.
+function JoinClientComponent({ token }: { token: string }) {
+  const router = useRouter();
+  const [status, setStatus] = useState<'checking' | 'joining' | 'done' | 'error'>('checking');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const processJoin = async (session: Session | null) => {
+      if (!session) {
+        // Redirect to auth, then come back here
+        const next = `/join/${encodeURIComponent(token)}`;
+        router.replace(`/auth?redirectedFrom=${encodeURIComponent(next)}`);
+        return;
+      }
+
+      setStatus('joining');
+      const { error: rpcError } = await supabase.rpc('redeem_invite', { invite_token: token });
+
+      if (rpcError) {
+        setError(rpcError.message);
+        setStatus('error');
+        return;
+      }
+
+      setStatus('done');
+      // Success, go to chat
+      router.replace('/chat');
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      processJoin(session);
+    });
+  }, [router, token]);
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-4 text-2xl font-semibold">Join with token</h1>
-
-      <div className="rounded-lg border bg-white p-4">
-        <p className="mb-2 text-sm text-gray-700">
-          You arrived here with this join token:
-        </p>
-
-        <div className="mb-4">
-          <code className="block break-all rounded bg-gray-100 p-2 text-sm">{token}</code>
-        </div>
-
-        <p className="mb-3 text-sm text-gray-600">
-          If this token is valid it should be exchanged server-side for a room membership.
-          You can implement the validation & membership creation here (for example, call a
-          server-side function that uses the Supabase service role key to make the change,
-          then redirect the user to <code>/chat</code> or a success page).
-        </p>
-
-        <div className="flex gap-2">
-          <a
-            href="/chat"
-            className="rounded bg-black px-4 py-2 text-white hover:opacity-90"
-          >
-            Back to chat
-          </a>
-          <a
-            href="/"
-            className="rounded border px-4 py-2 hover:bg-gray-50"
-          >
-            Home
-          </a>
-        </div>
-      </div>
+    <main className="mx-auto max-w-md p-6">
+      {status === 'checking' && <div>Checking session…</div>}
+      {status === 'joining' && <div>Joining room…</div>}
+      {status === 'done' && <div>Success! Redirecting to chat…</div>}
+      {status === 'error' && <div className="text-red-600">Could not join: {error}</div>}
     </main>
   );
 }
+
+// Use a generic type to avoid PageProps
+type DynamicPageProps = {
+  params: { token: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
+};
+
+const JoinByTokenPage: React.FC<DynamicPageProps> = ({ params }) => {
+  return <JoinClientComponent token={params.token} />;
+};
+
+export default JoinByTokenPage;
