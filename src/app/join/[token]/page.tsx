@@ -1,62 +1,35 @@
-'use client'; // This directive must be at the top
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { NextResponse } from 'next/server';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
-import { Session } from '@supabase/supabase-js';
+export const dynamic = 'force-dynamic';
 
-// This is now a pure client component that receives a simple string prop.
-function JoinClientComponent({ token }: { token: string }) {
-  const router = useRouter();
-  const [status, setStatus] = useState<'checking' | 'joining' | 'done' | 'error'>('checking');
-  const [error, setError] = useState<string | null>(null);
+export default async function JoinByTokenPage({ params }: { params: { token: string } }) {
+  const { token } = params;
+  const supabase = createServerComponentClient({ cookies });
 
-  useEffect(() => {
-    const processJoin = async (session: Session | null) => {
-      if (!session) {
-        // Redirect to auth, then come back here
-        const next = `/join/${encodeURIComponent(token)}`;
-        router.replace(`/auth?redirectedFrom=${encodeURIComponent(next)}`);
-        return;
-      }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-      setStatus('joining');
-      const { error: rpcError } = await supabase.rpc('redeem_invite', { invite_token: token });
+  // If the user is not logged in, redirect them to the auth page.
+  // We'll tell the auth page to send them back here after they sign in.
+  if (!session) {
+    const next = `/join/${encodeURIComponent(token)}`;
+    return redirect(`/auth?redirectedFrom=${encodeURIComponent(next)}`);
+  }
 
-      if (rpcError) {
-        setError(rpcError.message);
-        setStatus('error');
-        return;
-      }
+  // If the user IS logged in, try to redeem the invite.
+  const { error } = await supabase.rpc('redeem_invite', { invite_token: token });
 
-      setStatus('done');
-      // Success, go to chat
-      router.replace('/chat');
-    };
+  if (error) {
+    // If there's an error (e.g., invalid token), show an error message.
+    // We'll redirect to the chat page with an error query param.
+    return redirect(`/chat?error=${encodeURIComponent(error.message)}`);
+  }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      processJoin(session);
-    });
-  }, [router, token]);
-
-  return (
-    <main className="mx-auto max-w-md p-6">
-      {status === 'checking' && <div>Checking session…</div>}
-      {status === 'joining' && <div>Joining room…</div>}
-      {status === 'done' && <div>Success! Redirecting to chat…</div>}
-      {status === 'error' && <div className="text-red-600">Could not join: {error}</div>}
-    </main>
-  );
+  // If successful, redirect the user to the chat page.
+  // They will now see the new private room in their list.
+  return redirect('/chat');
 }
-
-// Use a generic type to avoid PageProps
-type DynamicPageProps = {
-  params: { token: string };
-  searchParams?: { [key: string]: string | string[] | undefined };
-};
-
-const JoinByTokenPage: React.FC<DynamicPageProps> = ({ params }) => {
-  return <JoinClientComponent token={params.token} />;
-};
-
-export default JoinByTokenPage;
