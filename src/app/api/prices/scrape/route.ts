@@ -1,79 +1,57 @@
-// --- File: src/app/api/prices/scrape/route.ts (Final PDF Version) ---
+// --- File: src/app/api/prices/scrape/route.ts (Final API Version) ---
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
-import pdf from 'pdf-parse';
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
-const DSE_HOMEPAGE_URL = 'https://dse.co.tz/';
+// This is the official, hidden API endpoint the DSE website uses to get its data.
+const DSE_API_URL = 'https://dse.co.tz/php-files/market-equity-data.php';
 
 export async function GET() {
   try {
-    // === Part 1: Find the Link to the Latest Report PDF ===
-    console.log('Fetching DSE homepage to find the latest report link...');
-    const homePageResponse = await fetch(DSE_HOMEPAGE_URL);
-    if (!homePageResponse.ok) throw new Error('Failed to fetch DSE homepage.');
+    console.log('Scraper function started: Calling DSE internal API...');
+
+    // === Part 1: Fetch the structured JSON data directly ===
+    const response = await fetch(DSE_API_URL, {
+      headers: {
+        // The API requires this header to respond correctly.
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch DSE API. Status: ${response.status}`);
+    }
+
+    const data = await response.json();
     
-    const html = await homePageResponse.text();
-    const $ = cheerio.load(html);
+    // The API returns an object with a key 'data' which is an array of stocks.
+    const stockList = data.data;
 
-    // Find the first "View" link inside the "Daily Market Reports" section
-    const reportPath = $('div#daily-reports a.btn').first().attr('href');
-    if (!reportPath) throw new Error('Could not find the link to the daily report PDF.');
-
-    const reportUrl = new URL(reportPath, DSE_HOMEPAGE_URL).href;
-    console.log(`Found latest report URL: ${reportUrl}`);
-
-    // === Part 2: Download and Parse the PDF Report ===
-    console.log('Downloading PDF report...');
-    const pdfResponse = await fetch(reportUrl);
-    if (!pdfResponse.ok) throw new Error(`Failed to download the report PDF from ${reportUrl}`);
-
-    const pdfArrayBuffer = await pdfResponse.arrayBuffer();
-    const pdfBuffer = Buffer.from(pdfArrayBuffer);
-    const pdfData = await pdf(pdfBuffer);
-    const pdfText = pdfData.text;
+    if (!stockList || !Array.isArray(stockList) || stockList.length === 0) {
+      throw new Error('No data found in the DSE API response.');
+    }
     
-    console.log('Successfully parsed PDF text.');
-
-    // === Part 3: Extract Prices from the PDF Text and Save to DB ===
+    // === Part 2: Process the clean data and save to DB ===
     const prices: { symbol: string; close: number }[] = [];
     const as_of_date = new Date().toISOString().slice(0, 10);
-    
-    // Split the PDF text into lines to process it
-    const lines = pdfText.split('\n');
-    let dataSectionStarted = false;
 
-    for (const line of lines) {
-      // The data starts after the "EQUITY MARKET" header in the PDF
-      if (line.trim().toUpperCase().includes('EQUITY MARKET')) {
-        dataSectionStarted = true;
-        continue;
-      }
-      if (!dataSectionStarted) continue;
-      
-      // Stop processing if we hit the end of the relevant section
-      if (line.trim().toUpperCase().includes('MARKET STATISTICS')) break;
+    for (const stock of stockList) {
+      const symbol = stock[0]?.trim().toUpperCase();
+      // The closing price is the 4th item in the array (index 3).
+      const closePriceStr = stock[3]?.trim().replace(/,/g, '');
+      const closePrice = Number(closePriceStr);
 
-      // Regex to find lines with stock data (e.g., "CRDB 1,230 1,230 ...")
-      const match = line.trim().match(/^([A-Z]+)\s+([\d,]+)/);
-      if (match) {
-        const symbol = match[1];
-        const closePriceStr = match[2].replace(/,/g, '');
-        const closePrice = Number(closePriceStr);
-
-        if (symbol && !isNaN(closePrice) && closePrice > 0) {
-          prices.push({ symbol, close: closePrice });
-        }
+      if (symbol && !isNaN(closePrice) && closePrice > 0) {
+        prices.push({ symbol, close: closePrice });
       }
     }
     
     if (prices.length === 0) {
-        return NextResponse.json({ ok: true, message: 'Could not extract any prices from the PDF.' });
+      return NextResponse.json({ ok: true, message: 'API responded but no valid prices could be extracted.' });
     }
 
-    console.log(`Successfully extracted ${prices.length} prices from the PDF.`);
+    console.log(`Successfully extracted ${prices.length} prices from the API.`);
 
     const supabaseAdmin = createSupabaseAdmin();
     const recordsToUpsert = prices.map(p => ({
@@ -86,7 +64,7 @@ export async function GET() {
     if (error) throw new Error(`Failed to save prices to Supabase: ${error.message}`);
 
     console.log('Scraper function finished successfully.');
-    return NextResponse.json({ ok: true, scraped: prices.length, source: reportUrl });
+    return NextResponse.json({ ok: true, scraped: prices.length, source: 'DSE Internal API' });
 
   } catch (e: any) {
     console.error('An error occurred in the scraper:', e.message);
