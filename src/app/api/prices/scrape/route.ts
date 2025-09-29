@@ -1,20 +1,26 @@
 // --- File: src/app/api/prices/scrape/route.ts ---
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import pdf from 'pdf.js-extract';
+import { PDFExtract } from 'pdf.js-extract';
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { GlobalWorkerOptions } from 'pdfjs-dist'; // Import PDF.js directly
 
 export const dynamic = 'force-dynamic';
 
 const DSE_HOMEPAGE_URL = 'https://dse.co.tz/';
 
+// Disable worker for server-side PDF parsing
+GlobalWorkerOptions.workerSrc = ''; // Empty string to disable Web Worker
+
 export async function GET() {
   try {
     // === Part 1: Find the Link to the Latest Report PDF ===
     console.log('Fetching DSE homepage to find the latest report link...');
-    const homePageResponse = await fetch(DSE_HOMEPAGE_URL);
+    const homePageResponse = await fetch(DSE_HOMEPAGE_URL, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
     if (!homePageResponse.ok) throw new Error('Failed to fetch DSE homepage.');
-    
+
     const html = await homePageResponse.text();
     const $ = cheerio.load(html);
 
@@ -24,7 +30,6 @@ export async function GET() {
     // Updated selector for market reports/PDFs
     $('section:contains("Market Report"), div:contains("Daily"), .report-link a, a[href*=".pdf"], a:contains("report")').each((i, el) => {
       const href = $(el).attr('href');
-      // Ensure href is a string and meets criteria
       if (typeof href === 'string' && (href.includes('.pdf') || href.toLowerCase().includes('report'))) {
         potentialLinks.push(href);
       }
@@ -35,7 +40,6 @@ export async function GET() {
 
     let reportPath: string | undefined;
     if (potentialLinks.length > 0) {
-      // Take the first PDF link or the first report link
       reportPath = potentialLinks.find(link => link.includes('.pdf')) || potentialLinks[0];
       console.log(`Using report URL: ${reportPath}`);
     }
@@ -51,9 +55,9 @@ export async function GET() {
       if (!pdfResponse.ok) throw new Error(`Failed to download the report PDF from ${reportUrl}`);
 
       const pdfBuffer = await pdfResponse.arrayBuffer();
-      const pdfExtractor = new pdf.PDFExtract();
+      const pdfExtractor = new PDFExtract();
       const data = await pdfExtractor.extractBuffer(Buffer.from(pdfBuffer));
-      
+
       const pdfText = data.pages.map(page => page.content.map(item => item.str).join(' ')).join('\n');
       console.log('Successfully parsed PDF text.');
 
@@ -83,7 +87,7 @@ export async function GET() {
     } else {
       // === Fallback: Scrape Real-Time Market Data Table ===
       console.log('No PDF link found. Falling back to scraping market data table...');
-      
+
       $('table tbody tr').each((i, row) => {
         const cols = $(row).find('td');
         if (cols.length >= 3) {
@@ -97,7 +101,6 @@ export async function GET() {
         }
       });
 
-      // Log table rows for debugging if no prices found
       if (prices.length === 0) {
         console.log('Sample table rows:', $('table tbody tr').map((i, el) => $(el).html()).get().slice(0, 3));
       }
