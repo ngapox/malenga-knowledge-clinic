@@ -1,16 +1,12 @@
 // --- File: src/app/api/prices/scrape/route.ts ---
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+import pdf from 'pdf.js-extract'; // <-- Now imported directly
 import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
 const DSE_HOMEPAGE_URL = 'https://dse.co.tz/';
-
-// This needs to be the absolute URL of your deployed application
-const VERCEL_URL = process.env.VERCEL_URL 
-  ? `https://${process.env.VERCEL_URL}` 
-  : 'http://localhost:3000';
 
 export async function GET() {
   try {
@@ -28,20 +24,19 @@ export async function GET() {
     const reportUrl = new URL(reportPath, DSE_HOMEPAGE_URL).href;
     console.log(`Found latest report URL: ${reportUrl}`);
 
-    // === Part 2: Call our own helper API to parse the PDF ===
-    console.log('Calling our internal PDF parsing service...');
-    const parseApiUrl = `${VERCEL_URL}/api/parse-pdf?url=${encodeURIComponent(reportUrl)}`;
-    const pdfTextResponse = await fetch(parseApiUrl);
-    
-    if (!pdfTextResponse.ok) {
-      const errorText = await pdfTextResponse.text();
-      throw new Error(`PDF parsing failed: ${errorText}`);
-    }
+    // === Part 2: Download and Parse the PDF Report ===
+    console.log('Downloading PDF report...');
+    const pdfResponse = await fetch(reportUrl);
+    if (!pdfResponse.ok) throw new Error(`Failed to download the report PDF from ${reportUrl}`);
 
-    const { text: pdfText } = await pdfTextResponse.json();
-    console.log('Successfully received parsed PDF text.');
+    const pdfBuffer = await pdfResponse.arrayBuffer();
+    const pdfExtractor = new pdf.PDFExtract();
+    const data = await pdfExtractor.extractBuffer(Buffer.from(pdfBuffer));
     
-    // === Part 3: Extract Prices and Save to DB (same as before) ===
+    const pdfText = data.pages.map(page => page.content.map(item => item.str).join(' ')).join('\n');
+    console.log('Successfully parsed PDF text.');
+
+    // === Part 3: Extract Prices from the PDF Text and Save to DB ===
     const prices: { symbol: string; close: number }[] = [];
     const as_of_date = new Date().toISOString().slice(0, 10);
     const lines = pdfText.split('\n');
@@ -68,7 +63,7 @@ export async function GET() {
     }
     
     if (prices.length === 0) {
-      return NextResponse.json({ ok: true, message: 'Could not extract any prices from the PDF text.' });
+      return NextResponse.json({ ok: true, message: 'Could not extract any prices from the PDF.' });
     }
 
     console.log(`Successfully extracted ${prices.length} prices from the PDF.`);
