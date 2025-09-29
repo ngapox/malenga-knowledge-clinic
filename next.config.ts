@@ -10,6 +10,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Fix for 'canvas' module in PDF.js / pdf.js-extract
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Externalize 'canvas' on the server side (treat as Node.js module)
+      config.externals.push('canvas');
+    }
+    return config;
+  },
 };
 
 export default nextConfig;
