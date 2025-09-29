@@ -5,16 +5,15 @@ import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
-// The official DSE Market Report URL
-const DSE_URL = 'https://dse.co.tz/dse/market-report';
+// CORRECTED: This is the new URL for the DSE market data page.
+const DSE_URL = 'https://dse.co.tz/market-data/';
 
 export async function GET() {
   try {
     console.log('Scraper function started...');
 
-    // === 1. Fetch the HTML content of the DSE page ===
     const response = await fetch(DSE_URL, {
-      next: { revalidate: 3600 }, // Cache the response for 1 hour to be polite
+      next: { revalidate: 3600 },
     });
     if (!response.ok) {
       throw new Error(`Failed to fetch DSE page. Status: ${response.status}`);
@@ -22,20 +21,20 @@ export async function GET() {
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // === 2. Extract the data from the HTML table ===
-    // This selector targets the main table body. NOTE: This might change if DSE updates their website.
-    const rows = $('table#tbl-listed-securities tbody tr');
+    // CORRECTED: This is the new selector for the main market data table.
+    const rows = $('table#dataTable tbody tr');
     const prices: { symbol: string; close: number }[] = [];
-    const as_of_date = new Date().toISOString().slice(0, 10); // Use today's date
+    const as_of_date = new Date().toISOString().slice(0, 10);
 
     rows.each((index, element) => {
       const tds = $(element).find('td');
-      if (tds.length >= 5) { // Ensure the row has enough columns
+      if (tds.length >= 8) { // The new table has more columns
         const symbol = $(tds[0]).text().trim().toUpperCase();
-        const closePriceStr = $(tds[4]).text().trim().replace(/,/g, ''); // Get "Close Price" column and remove commas
+        // CORRECTED: The "Closing Price" is now in the 8th column (index 7).
+        const closePriceStr = $(tds[7]).text().trim().replace(/,/g, '');
         const closePrice = Number(closePriceStr);
 
-        if (symbol && !isNaN(closePrice)) {
+        if (symbol && !isNaN(closePrice) && closePrice > 0) {
           prices.push({ symbol, close: closePrice });
         }
       }
@@ -48,7 +47,6 @@ export async function GET() {
 
     console.log(`Successfully scraped ${prices.length} prices.`);
 
-    // === 3. Save the extracted data to your Supabase table ===
     const supabaseAdmin = createSupabaseAdmin();
     const recordsToUpsert = prices.map(p => ({
       symbol: p.symbol,
@@ -64,7 +62,7 @@ export async function GET() {
     }
 
     console.log('Scraper function finished successfully.');
-    return NextResponse.json({ ok: true, scraped: prices.length });
+    return NextResponse.json({ ok: true, scraped: prices.length, source: 'DSE Website' });
 
   } catch (e: any) {
     console.error('An error occurred in the scraper:', e.message);
