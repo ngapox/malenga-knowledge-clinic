@@ -1,12 +1,12 @@
-'use client';
+'use client'; // This directive must be at the top
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Session } from '@supabase/supabase-js';
 
-export default function JoinByTokenPage({ params }: { params: { token: string } }) {
-  const { token } = params;
+// This is now a pure client component that receives a simple string prop.
+function JoinClientComponent({ token }: { token: string }) {
   const router = useRouter();
   const [status, setStatus] = useState<'checking' | 'joining' | 'done' | 'error'>('checking');
   const [error, setError] = useState<string | null>(null);
@@ -14,14 +14,12 @@ export default function JoinByTokenPage({ params }: { params: { token: string } 
   useEffect(() => {
     const processJoin = async (session: Session | null) => {
       if (!session) {
-        // If there's no session, redirect to the auth page.
-        // Pass the current join URL as the 'next' parameter so we can come back.
+        // Redirect to auth, then come back here
         const next = `/join/${encodeURIComponent(token)}`;
-        router.replace(`/auth?next=${encodeURIComponent(next)}`);
+        router.replace(`/auth?redirectedFrom=${encodeURIComponent(next)}`);
         return;
       }
 
-      // If we have a session, proceed with joining the room.
       setStatus('joining');
       const { error: rpcError } = await supabase.rpc('redeem_invite', { invite_token: token });
 
@@ -32,11 +30,10 @@ export default function JoinByTokenPage({ params }: { params: { token: string } 
       }
 
       setStatus('done');
-      // Success! Redirect to the chat page.
+      // Success, go to chat
       router.replace('/chat');
     };
 
-    // Check the session as soon as the component mounts.
     supabase.auth.getSession().then(({ data: { session } }) => {
       processJoin(session);
     });
@@ -50,4 +47,11 @@ export default function JoinByTokenPage({ params }: { params: { token: string } 
       {status === 'error' && <div className="text-red-600">Could not join: {error}</div>}
     </main>
   );
+}
+
+// This is the actual page component. It is now very simple.
+export default function JoinByTokenPage({ params }: { params: { token: string } }) {
+  // It receives the complex server props and passes ONLY the necessary data
+  // down to the client component.
+  return <JoinClientComponent token={params.token} />;
 }
