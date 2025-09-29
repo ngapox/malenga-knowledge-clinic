@@ -3,120 +3,107 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
+type Profile = {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  phone_e164: string | null;
+  sms_opt_in: boolean;
+};
+
+export const dynamic = 'force-dynamic';
+
 export default function ProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-
-  const [fullName, setFullName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [p, setP] = useState<Profile | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Wait for session
   useEffect(() => {
-    let mounted = true;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      setUserId(session?.user?.id ?? null);
-      setLoadingAuth(false);
+    let off = false;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (off) return;
+      const uid = session?.user?.id ?? null;
+      setUserId(uid);
+      if (!uid) { setLoading(false); return; }
+
+      const { data } = await supabase.from('profiles')
+        .select('id, full_name, avatar_url, phone_e164, sms_opt_in')
+        .eq('id', uid)
+        .maybeSingle();
+      if (data) setP(data as Profile);
+      setLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUserId(session?.user?.id ?? null);
-      setLoadingAuth(false);
     });
-    return () => subscription.unsubscribe();
+    return () => { off = true; subscription.unsubscribe(); };
   }, []);
 
-  // Load profile
-  useEffect(() => {
-    (async () => {
-      if (!userId) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('full_name, avatar_url')
-        .eq('id', userId)
-        .maybeSingle();
-      setFullName(data?.full_name ?? '');
-      setAvatarUrl(data?.avatar_url ?? null);
-      setLoadingProfile(false);
-    })();
-  }, [userId]);
-
   const save = async () => {
-    if (!userId) return;
+    if (!userId || !p) return;
     setSaving(true);
     setMsg(null);
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({ id: userId, full_name: fullName, avatar_url: avatarUrl });
+    const { error } = await supabase.from('profiles').upsert({
+      id: userId,
+      full_name: p.full_name,
+      avatar_url: p.avatar_url,
+      phone_e164: p.phone_e164,
+      sms_opt_in: p.sms_opt_in,
+    });
     setSaving(false);
-    setMsg(error ? error.message : 'Saved!');
+    setMsg(error ? error.message : 'Saved.');
   };
 
-  const onAvatarChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !userId) return;
-
-    // Use a stable path so re-uploads overwrite cleanly
-    const path = `${userId}/avatar.jpg`;
-    const { error: upErr } = await supabase.storage
-      .from('avatars')
-      .upload(path, file, { upsert: true, contentType: file.type });
-
-    if (upErr) {
-      setMsg(upErr.message);
-      return;
-    }
-
-    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-    const publicUrl = data.publicUrl + `?v=${Date.now()}`; // bust cache
-    setAvatarUrl(publicUrl);
-  };
-
-  if (loadingAuth) return <div className="p-6">Checking session…</div>;
-  if (!userId) return <div className="p-6">Please <a className="underline" href="/auth">sign in</a> to edit your profile.</div>;
-  if (loadingProfile) return <div className="p-6">Loading profile…</div>;
+  if (loading) return <div className="p-6">Loading…</div>;
+  if (!userId) return <div className="p-6">Please <a className="underline" href="/auth">sign in</a>.</div>;
 
   return (
-    <main className="mx-auto max-w-xl p-6">
+    <main className="mx-auto max-w-xl space-y-4 p-6">
       <h1 className="text-2xl font-bold">Your Profile</h1>
 
-      <div className="mt-6 grid gap-4 rounded-2xl border bg-white p-4 sm:grid-cols-[120px_1fr]">
-        <div className="flex flex-col items-center justify-start gap-2">
-          <div className="h-24 w-24 overflow-hidden rounded-full border bg-gray-100">
-            {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-gray-400">No photo</div>
-            )}
-          </div>
-          <label className="cursor-pointer rounded-lg border px-3 py-1 text-sm hover:bg-gray-50">
-            Upload
-            <input type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
-          </label>
-        </div>
-
-        <div>
-          <label className="text-sm text-gray-600">Display name</label>
+      <div className="rounded-xl border bg-white p-4 space-y-3">
+        <label className="block">
+          <div className="text-sm text-gray-600">Display name</div>
           <input
-            className="mt-1 w-full rounded-lg border p-2"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="e.g., Neema M."
+            className="mt-1 w-full rounded border p-2"
+            value={p?.full_name ?? ''}
+            onChange={(e) => setP(prev => prev ? { ...prev, full_name: e.target.value } : prev)}
           />
+        </label>
 
-          <button
-            onClick={save}
-            disabled={saving}
-            className="mt-3 rounded-lg bg-black px-4 py-2 text-white disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          {msg && <div className="mt-2 text-sm text-gray-600">{msg}</div>}
-        </div>
+        <label className="block">
+          <div className="text-sm text-gray-600">Phone (E.164, e.g. +2557XXXXXXXX)</div>
+          <input
+            className="mt-1 w-full rounded border p-2"
+            value={p?.phone_e164 ?? ''}
+            onChange={(e) => setP(prev => prev ? { ...prev, phone_e164: e.target.value } : prev)}
+            placeholder="+2557XXXXXXXX"
+          />
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={Boolean(p?.sms_opt_in)}
+            onChange={(e) => setP(prev => prev ? { ...prev, sms_opt_in: e.target.checked } : prev)}
+          />
+          <span className="text-sm">Send me price **SMS** alerts</span>
+        </label>
+
+        <button
+          onClick={save}
+          disabled={saving}
+          className="rounded-lg bg-black px-4 py-2 text-white disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+
+        {msg && <div className="text-sm text-gray-600">{msg}</div>}
+        <p className="text-xs text-gray-500">
+          We’ll send SMS from your registered sender name via Beem. Standard SMS costs apply to your account.
+        </p>
       </div>
     </main>
   );

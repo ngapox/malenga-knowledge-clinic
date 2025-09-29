@@ -2,12 +2,13 @@
   "name": "malenga-knowledge-clinic",
   "version": "0.1.0",
   "private": true,
+ 
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
+  
   "dependencies": {
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
