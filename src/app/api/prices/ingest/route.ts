@@ -1,10 +1,12 @@
+// --- File: src/app/api/prices/ingest/route.ts ---
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { createSupabaseAdmin } from '@/lib/supabaseAdmin'; // Corrected: Import the function
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    const supabaseAdmin = createSupabaseAdmin(); // Corrected: Call the function to create the client
     const body = await req.json();
     const as_of_date = body?.as_of_date;
     const rows: { symbol: string; close: number }[] = body?.rows || [];
@@ -15,7 +17,7 @@ export async function POST(req: Request) {
     // upsert in chunks
     const chunk = 500;
     for (let i = 0; i < rows.length; i += chunk) {
-      const batch = rows.slice(i, i + chunk).map(r => ({
+      const batch = rows.slice(i, i + chunk).map((r) => ({
         symbol: r.symbol.toUpperCase(),
         as_of_date,
         close: r.close,
