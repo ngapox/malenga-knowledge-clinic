@@ -1,5 +1,6 @@
 // src/app/api/daily-summary/route.ts
 import { NextResponse } from 'next/server';
+// import pdfParse from 'pdf-parse';
 
 export async function GET() {
   const today = new Date().toISOString().slice(0, 10);
