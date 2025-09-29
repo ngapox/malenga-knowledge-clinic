@@ -1,3 +1,4 @@
+// --- File: src/app/watchlist/page.tsx ---
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -52,12 +53,17 @@ export default function WatchlistPage() {
       setUserId(session?.user?.id ?? null);
       setLoadingAuth(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_evt, session) => {
       if (cancelled) return;
       setUserId(session?.user?.id ?? null);
       setLoadingAuth(false);
     });
-    return () => { cancelled = true; subscription.unsubscribe(); };
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // ===== Load items =====
@@ -90,16 +96,13 @@ export default function WatchlistPage() {
         setLatest({});
         return;
       }
-      const symbols = Array.from(new Set(items.map(i => i.symbol.toUpperCase())));
+      const symbols = Array.from(new Set(items.map((i) => i.symbol.toUpperCase())));
       if (symbols.length === 0) {
         setLatest({});
         return;
       }
 
-      const { data, error } = await supabase
-        .from('dse_quotes')
-        .select('symbol, as_of_date, close')
-        .in('symbol', symbols);
+      const { data, error } = await supabase.from('dse_quotes').select('symbol, as_of_date, close').in('symbol', symbols);
 
       if (error || !data) {
         setLatest({});
@@ -119,6 +122,36 @@ export default function WatchlistPage() {
     })();
   }, [items]);
 
+  // ====================================================================
+  // === 🚀 NEW: Real-time price updates via Supabase subscriptions ===
+  // ====================================================================
+  useEffect(() => {
+    const channel = supabase
+      .channel('dse_quotes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dse_quotes' }, (payload) => {
+        const newQuote = payload.new as { symbol: string; close: number; as_of_date: string };
+        const symbol = newQuote.symbol.toUpperCase();
+
+        // Check if the new quote is for a symbol in our watchlist
+        if (items.some((item) => item.symbol.toUpperCase() === symbol)) {
+          setLatest((prev) => ({
+            ...prev,
+            [symbol]: {
+              close: newQuote.close,
+              date: newQuote.as_of_date,
+            },
+          }));
+        }
+      })
+      .subscribe();
+
+    // Cleanup function to remove the subscription when the component unmounts
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [items]); // Re-subscribe if the items in the watchlist change
+
+
   // ===== Helpers =====
   const grouped = useMemo(() => {
     const g: Record<string, WatchItem[]> = {};
@@ -130,14 +163,23 @@ export default function WatchlistPage() {
   }, [items]);
 
   const resetForm = () => {
-    setKind('stock'); setSymbol(''); setName(''); setMarket('DSE');
-    setTarget(''); setAbove(''); setBelow(''); setNotes('');
+    setKind('stock');
+    setSymbol('');
+    setName('');
+    setMarket('DSE');
+    setTarget('');
+    setAbove('');
+    setBelow('');
+    setNotes('');
   };
 
   const addItem = async () => {
     if (!userId) return;
     const sym = symbol.trim().toUpperCase();
-    if (!sym) { setMessage('Symbol is required'); return; }
+    if (!sym) {
+      setMessage('Symbol is required');
+      return;
+    }
 
     setSaving(true);
     setMessage(null);
@@ -153,11 +195,7 @@ export default function WatchlistPage() {
       notes: notes.trim() || null,
     };
 
-    const { data, error } = await supabase
-      .from('watchlist_items')
-      .insert(payload)
-      .select('*')
-      .single();
+    const { data, error } = await supabase.from('watchlist_items').insert(payload).select('*').single();
 
     setSaving(false);
 
@@ -172,26 +210,28 @@ export default function WatchlistPage() {
       return;
     }
 
-    setItems(prev => [...prev, data as WatchItem].sort((a, b) =>
-      a.kind.localeCompare(b.kind) || a.symbol.localeCompare(b.symbol)
-    ));
+    setItems(
+      (prev) =>
+        [...prev, data as WatchItem].sort(
+          (a, b) => a.kind.localeCompare(b.kind) || a.symbol.localeCompare(b.symbol)
+        )
+    );
     resetForm();
   };
 
   const removeItem = async (id: string) => {
     if (!confirm('Remove from your watchlist?')) return;
     const { error } = await supabase.from('watchlist_items').delete().eq('id', id);
-    if (!error) setItems(prev => prev.filter(x => x.id !== id));
+    if (!error) setItems((prev) => prev.filter((x) => x.id !== id));
     else alert(error.message);
   };
 
   const quickUpdate = async (id: string, patch: Partial<WatchItem>) => {
     const { error } = await supabase.from('watchlist_items').update(patch).eq('id', id);
-    if (!error) setItems(prev => prev.map(x => (x.id === id ? { ...x, ...patch } as WatchItem : x)));
+    if (!error) setItems((prev) => prev.map((x) => (x.id === id ? ({ ...x, ...patch } as WatchItem) : x)));
   };
 
-  const formatPrice = (n: number | null | undefined) =>
-    typeof n === 'number' ? n.toLocaleString() : '—';
+  const formatPrice = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocaleString() : '—');
 
   // ===== Render =====
   if (loadingAuth) return <div className="p-6">Checking session…</div>;
@@ -210,7 +250,11 @@ export default function WatchlistPage() {
             value={kind}
             onChange={(e) => setKind(e.target.value as WatchItem['kind'])}
           >
-            {KINDS.map(k => <option key={k} value={k}>{k}</option>)}
+            {KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
           </select>
           <input
             className="rounded-lg border p-2"
@@ -275,10 +319,7 @@ export default function WatchlistPage() {
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Items</h2>
           <div className="flex items-center gap-2">
-            <button
-              onClick={loadItems}
-              className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50"
-            >
+            <button onClick={loadItems} className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50">
               Refresh
             </button>
           </div>
@@ -290,91 +331,93 @@ export default function WatchlistPage() {
           <div className="p-3 text-sm text-gray-500">No items yet. Add your first one above.</div>
         ) : (
           <div className="mt-3 space-y-6">
-            {Object.keys(grouped).sort().map((k) => (
-              <div key={k}>
-                <div className="mb-2 text-sm font-semibold uppercase text-gray-500">{k}</div>
-                <div className="overflow-hidden rounded-xl border">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="p-2 text-left">Symbol</th>
-                        <th className="p-2 text-left">Name</th>
-                        <th className="p-2 text-left">Market</th>
-                        <th className="p-2 text-left">Last (TZS)</th>
-                        <th className="p-2 text-left">Target</th>
-                        <th className="p-2 text-left">Alert ≥</th>
-                        <th className="p-2 text-left">Alert ≤</th>
-                        <th className="p-2 text-left">Notes</th>
-                        <th className="p-2 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {grouped[k].map((it) => {
-                        const latestFor = latest[it.symbol?.toUpperCase()];
-                        return (
-                          <tr key={it.id} className="border-t">
-                            <td className="p-2 font-medium">{it.symbol}</td>
-                            <td className="p-2">{it.name}</td>
-                            <td className="p-2">{it.market}</td>
-                            <td className="p-2" title={latestFor?.date ?? ''}>
-                              {latestFor ? formatPrice(latestFor.close) : '—'}
-                            </td>
-                            <td className="p-2">
-                              <input
-                                className="w-24 rounded border p-1"
-                                defaultValue={it.target_price ?? ''}
-                                onBlur={(e) =>
-                                  quickUpdate(it.id, {
-                                    target_price: e.target.value ? Number(e.target.value) : null,
-                                  })
-                                }
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                className="w-24 rounded border p-1"
-                                defaultValue={it.alert_above ?? ''}
-                                onBlur={(e) =>
-                                  quickUpdate(it.id, {
-                                    alert_above: e.target.value ? Number(e.target.value) : null,
-                                  })
-                                }
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                className="w-24 rounded border p-1"
-                                defaultValue={it.alert_below ?? ''}
-                                onBlur={(e) =>
-                                  quickUpdate(it.id, {
-                                    alert_below: e.target.value ? Number(e.target.value) : null,
-                                  })
-                                }
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                className="w-full rounded border p-1"
-                                defaultValue={it.notes ?? ''}
-                                onBlur={(e) => quickUpdate(it.id, { notes: e.target.value || null })}
-                              />
-                            </td>
-                            <td className="p-2 text-right">
-                              <button
-                                onClick={() => removeItem(it.id)}
-                                className="rounded border px-2 py-1 text-xs text-red-600 hover:bg-gray-50"
-                              >
-                                Remove
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+            {Object.keys(grouped)
+              .sort()
+              .map((k) => (
+                <div key={k}>
+                  <div className="mb-2 text-sm font-semibold uppercase text-gray-500">{k}</div>
+                  <div className="overflow-hidden rounded-xl border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="p-2 text-left">Symbol</th>
+                          <th className="p-2 text-left">Name</th>
+                          <th className="p-2 text-left">Market</th>
+                          <th className="p-2 text-left">Last (TZS)</th>
+                          <th className="p-2 text-left">Target</th>
+                          <th className="p-2 text-left">Alert ≥</th>
+                          <th className="p-2 text-left">Alert ≤</th>
+                          <th className="p-2 text-left">Notes</th>
+                          <th className="p-2 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {grouped[k].map((it) => {
+                          const latestFor = latest[it.symbol?.toUpperCase()];
+                          return (
+                            <tr key={it.id} className="border-t">
+                              <td className="p-2 font-medium">{it.symbol}</td>
+                              <td className="p-2">{it.name}</td>
+                              <td className="p-2">{it.market}</td>
+                              <td className="p-2" title={latestFor?.date ?? ''}>
+                                {latestFor ? formatPrice(latestFor.close) : '—'}
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  className="w-24 rounded border p-1"
+                                  defaultValue={it.target_price ?? ''}
+                                  onBlur={(e) =>
+                                    quickUpdate(it.id, {
+                                      target_price: e.target.value ? Number(e.target.value) : null,
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  className="w-24 rounded border p-1"
+                                  defaultValue={it.alert_above ?? ''}
+                                  onBlur={(e) =>
+                                    quickUpdate(it.id, {
+                                      alert_above: e.target.value ? Number(e.target.value) : null,
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  className="w-24 rounded border p-1"
+                                  defaultValue={it.alert_below ?? ''}
+                                  onBlur={(e) =>
+                                    quickUpdate(it.id, {
+                                      alert_below: e.target.value ? Number(e.target.value) : null,
+                                    })
+                                  }
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  className="w-full rounded border p-1"
+                                  defaultValue={it.notes ?? ''}
+                                  onBlur={(e) => quickUpdate(it.id, { notes: e.target.value || null })}
+                                />
+                              </td>
+                              <td className="p-2 text-right">
+                                <button
+                                  onClick={() => removeItem(it.id)}
+                                  className="rounded border px-2 py-1 text-xs text-red-600 hover:bg-gray-50"
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </section>

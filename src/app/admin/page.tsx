@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import Link from 'next/link';
 
 type Room = {
   id: string;
   name: string;
   is_public: boolean;
   room_settings?: {
-    room_id: string; notice: string | null; admins_only_post: boolean; slow_mode_seconds: number;
+    room_id: string;
+    notice: string | null;
+    admins_only_post: boolean;
+    slow_mode_seconds: number;
   } | null;
   room_invites?: { token: string; created_at: string; expires_at: string | null }[];
 };
@@ -22,7 +26,9 @@ type Member = {
 function makeToken() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export default function AdminPage() {
@@ -31,11 +37,10 @@ export default function AdminPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [newRoomName, setNewRoomName] = useState('');
-  const [linkByRoom, setLinkByRoom] = useState<Record<string,string>>({});
+  const [linkByRoom, setLinkByRoom] = useState<Record<string, string>>({});
   const [membersByRoom, setMembersByRoom] = useState<Record<string, Member[]>>({});
   const [openMembers, setOpenMembers] = useState<Record<string, boolean>>({});
 
-  // auth + role
   useEffect(() => {
     (async () => {
       const { data: s } = await supabase.auth.getSession();
@@ -48,16 +53,17 @@ export default function AdminPage() {
     })();
   }, []);
 
-  // load rooms + settings + invites
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase
         .from('rooms')
-        .select(`
+        .select(
+          `
           id, name, is_public,
           room_settings ( room_id, notice, admins_only_post, slow_mode_seconds ),
           room_invites ( token, created_at, expires_at )
-        `)
+        `
+        )
         .order('name');
       if (!error && data) setRooms(data as unknown as Room[]);
       setLoading(false);
@@ -65,57 +71,67 @@ export default function AdminPage() {
   }, []);
 
   const saveSettings = async (r: Room, patch: Partial<NonNullable<Room['room_settings']>>) => {
-    const current = r.room_settings ?? { room_id: r.id, notice: null, admins_only_post: false, slow_mode_seconds: 0 };
+    const current = r.room_settings ?? {
+      room_id: r.id,
+      notice: null,
+      admins_only_post: false,
+      slow_mode_seconds: 0,
+    };
     const payload = { ...current, ...patch, room_id: r.id };
     await supabase.from('room_settings').upsert(payload);
-    setRooms(prev => prev.map(x => x.id === r.id ? { ...x, room_settings: payload } : x));
+    setRooms((prev) => (prev.map((x) => (x.id === r.id ? { ...x, room_settings: payload } : x))));
   };
 
   const togglePublic = async (r: Room, value: boolean) => {
     await supabase.from('rooms').update({ is_public: value }).eq('id', r.id);
-    setRooms(prev => prev.map(x => x.id === r.id ? { ...x, is_public: value } : x));
+    setRooms((prev) => (prev.map((x) => (x.id === r.id ? { ...x, is_public: value } : x))));
   };
 
   const createRoom = async () => {
-  if (!newRoomName.trim() || !userId) return;
-    const { data, error } = await supabase.from('rooms')
-        .insert({ name: newRoomName.trim(), is_public: false, created_by: userId })
-        .select(`
+    if (!newRoomName.trim() || !userId) return;
+    const { data, error } = await supabase
+      .from('rooms')
+      .insert({ name: newRoomName.trim(), is_public: false, created_by: userId })
+      .select(
+        `
         id, name, is_public,
         room_settings ( room_id, notice, admins_only_post, slow_mode_seconds ),
         room_invites ( token, created_at, expires_at )
-        `)
-        .single();
+        `
+      )
+      .single();
 
     if (error) {
-        alert(error.message);               // <-- show why it failed
-        return;
+      alert(error.message);
+      return;
     }
 
-    setRooms(prev => [...prev, data as any].sort((a,b) => a.name.localeCompare(b.name)));
+    setRooms((prev) => [...prev, data as any].sort((a, b) => a.name.localeCompare(b.name)));
     setNewRoomName('');
- };
-
+  };
 
   const deleteRoom = async (r: Room) => {
     if (!confirm(`Delete room "${r.name}"? This removes its messages too.`)) return;
     await supabase.from('rooms').delete().eq('id', r.id);
-    setRooms(prev => prev.filter(x => x.id !== r.id));
+    setRooms((prev) => prev.filter((x) => x.id !== r.id));
   };
 
   const createInvite = async (r: Room, daysValid = 0) => {
     const token = makeToken();
-    const expires_at = daysValid > 0
-      ? new Date(Date.now() + daysValid*24*3600*1000).toISOString()
-      : null;
+    const expires_at = daysValid > 0 ? new Date(Date.now() + daysValid * 24 * 3600 * 1000).toISOString() : null;
 
     const { error } = await supabase.from('room_invites').insert({
-      room_id: r.id, token, expires_at
+      room_id: r.id,
+      token,
+      expires_at,
     });
-    if (error) { alert(error.message); return; }
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
     const link = typeof window !== 'undefined' ? `${window.location.origin}/join/${token}` : '';
-    setLinkByRoom(prev => ({ ...prev, [r.id]: link }));
+    setLinkByRoom((prev) => ({ ...prev, [r.id]: link }));
   };
 
   const loadMembers = async (roomId: string) => {
@@ -125,24 +141,22 @@ export default function AdminPage() {
       .eq('room_id', roomId)
       .order('joined_at', { ascending: true });
     if (!error && data) {
-      // Map profiles from array to object or null
       const members: Member[] = data.map((m: any) => ({
         user_id: m.user_id,
         joined_at: m.joined_at,
-        profiles: Array.isArray(m.profiles) ? (m.profiles[0] ?? null) : m.profiles ?? null,
+        profiles: Array.isArray(m.profiles) ? m.profiles[0] ?? null : m.profiles ?? null,
       }));
-      setMembersByRoom(prev => ({ ...prev, [roomId]: members }));
+      setMembersByRoom((prev) => ({ ...prev, [roomId]: members }));
     }
   };
 
   const removeMember = async (roomId: string, userIdToKick: string) => {
     if (!confirm('Remove this member from the room?')) return;
-    const { error } = await supabase.from('room_members').delete()
-      .eq('room_id', roomId).eq('user_id', userIdToKick);
+    const { error } = await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', userIdToKick);
     if (!error) {
-      setMembersByRoom(prev => ({
+      setMembersByRoom((prev) => ({
         ...prev,
-        [roomId]: (prev[roomId] || []).filter(m => m.user_id !== userIdToKick),
+        [roomId]: (prev[roomId] || []).filter((m) => m.user_id !== userIdToKick),
       }));
     } else {
       alert(error.message);
@@ -157,7 +171,12 @@ export default function AdminPage() {
     <main className="mx-auto max-w-5xl p-6 space-y-6">
       <h1 className="text-2xl font-bold">Admin Panel</h1>
 
-      {/* Create room */}
+      <div className="rounded-2xl border bg-white p-4">
+        <Link href="/admin/prices" className="font-semibold text-blue-600 hover:underline">
+          → Go to DSE Prices Upload
+        </Link>
+      </div>
+
       <section className="rounded-2xl border bg-white p-4">
         <h2 className="font-semibold">Create Room</h2>
         <div className="mt-3 flex gap-2">
@@ -173,15 +192,21 @@ export default function AdminPage() {
         </div>
       </section>
 
-      {/* Manage rooms */}
       <section className="rounded-2xl border bg-white p-4">
         <h2 className="font-semibold">Rooms</h2>
 
         <div className="mt-4 space-y-4">
           {rooms.map((r) => {
-            const s = r.room_settings ?? { room_id: r.id, notice: '', admins_only_post: false, slow_mode_seconds: 0 };
+            const s = r.room_settings ?? {
+              room_id: r.id,
+              notice: '',
+              admins_only_post: false,
+              slow_mode_seconds: 0,
+            };
             const lastInvite = r.room_invites?.[0];
-            const hintLink = linkByRoom[r.id] || (lastInvite && typeof window !== 'undefined' ? `${window.location.origin}/join/${lastInvite.token}` : '');
+            const hintLink =
+              linkByRoom[r.id] ||
+              (lastInvite && typeof window !== 'undefined' ? `${window.location.origin}/join/${lastInvite.token}` : '');
 
             const isOpen = !!openMembers[r.id];
             const members = membersByRoom[r.id];
@@ -242,13 +267,9 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Invite link */}
                 <div className="mt-4 rounded-lg border p-3">
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => createInvite(r, 0)}
-                      className="rounded-lg bg-black px-3 py-1 text-white"
-                    >
+                    <button onClick={() => createInvite(r, 0)} className="rounded-lg bg-black px-3 py-1 text-white">
                       Create invite link
                     </button>
                     <input
@@ -264,13 +285,12 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Members */}
                 <div className="mt-4 rounded-lg border p-3">
                   <div className="flex items-center justify-between">
                     <div className="font-medium">Members</div>
                     <button
                       onClick={async () => {
-                        setOpenMembers(prev => ({ ...prev, [r.id]: !isOpen }));
+                        setOpenMembers((prev) => ({ ...prev, [r.id]: !isOpen }));
                         if (!isOpen && !members) await loadMembers(r.id);
                       }}
                       className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50"
@@ -285,7 +305,7 @@ export default function AdminPage() {
                       {(members ?? []).map((m) => (
                         <div key={m.user_id} className="flex items-center justify-between rounded-lg bg-gray-50 p-2">
                           <div className="text-sm">
-                            {m.profiles?.full_name || '(no name)'} <span className="text-gray-500">— {m.user_id.slice(0,8)}</span>
+                            {m.profiles?.full_name || '(no name)'} <span className="text-gray-500">— {m.user_id.slice(0, 8)}</span>
                           </div>
                           <button
                             onClick={() => removeMember(r.id, m.user_id)}
