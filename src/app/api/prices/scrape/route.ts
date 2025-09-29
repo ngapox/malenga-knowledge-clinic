@@ -5,7 +5,6 @@ import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
-// CORRECTED: The data is on the main homepage.
 const DSE_URL = 'https://dse.co.tz/';
 
 export async function GET() {
@@ -21,8 +20,8 @@ export async function GET() {
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    // This selector targets the "Equity" table from your screenshot.
-    const rows = $('table#equity-table tbody tr');
+    // CORRECTED: Using the new table ID you found.
+    const rows = $('table#equity-watch tbody tr');
     const prices: { symbol: string; close: number }[] = [];
     const as_of_date = new Date().toISOString().slice(0, 10);
 
@@ -40,7 +39,7 @@ export async function GET() {
     });
 
     if (prices.length === 0) {
-      console.log('No prices found on the DSE page. The table structure may have changed.');
+      console.log('No prices found on the DSE page. The selector "table#equity-watch" might be incorrect.');
       return NextResponse.json({ ok: true, message: 'No prices found, scraper might need an update.' });
     }
 
