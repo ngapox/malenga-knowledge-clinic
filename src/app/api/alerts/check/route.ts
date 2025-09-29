@@ -1,23 +1,26 @@
+// --- File: src/app/api/alerts/check/route.ts ---
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { createSupabaseAdmin } from '@/lib/supabaseAdmin'; // Corrected import
 
 export const dynamic = 'force-dynamic';
 
+// ... (The BEEM constants and helper functions are unchanged)
 const BEEM_ENDPOINT = process.env.BEEM_SMS_ENDPOINT || 'https://apisms.beem.africa/v1/send';
 const BEEM_API_KEY = process.env.BEEM_API_KEY || '';
 const BEEM_SECRET = process.env.BEEM_SECRET_KEY || '';
 const BEEM_SENDER = process.env.BEEM_SENDER_ID || 'INFO';
 
 function toBeemDest(phoneE164: string): string | null {
-  // Convert +2557XXXX → 2557XXXX ; also support local 07… as Tanzania by default
+  // ... (function is unchanged)
   if (!phoneE164) return null;
   const digits = phoneE164.replace(/\D/g, '');
   if (!digits) return null;
-  if (digits.startsWith('0')) return '255' + digits.slice(1); // TZ default
-  return digits; // should already be CC + number without '+'
+  if (digits.startsWith('0')) return '255' + digits.slice(1);
+  return digits;
 }
 
 async function sendSMS(dest: string, text: string) {
+  // ... (function is unchanged)
   const auth = Buffer.from(`${BEEM_API_KEY}:${BEEM_SECRET}`).toString('base64');
   const payload = {
     source_addr: BEEM_SENDER,
@@ -26,7 +29,6 @@ async function sendSMS(dest: string, text: string) {
     message: text,
     recipients: [{ recipient_id: '1', dest_addr: dest }],
   };
-
   const res = await fetch(BEEM_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -35,7 +37,6 @@ async function sendSMS(dest: string, text: string) {
     },
     body: JSON.stringify(payload),
   });
-
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     throw new Error(data?.message || `Beem error ${res.status}`);
@@ -43,8 +44,11 @@ async function sendSMS(dest: string, text: string) {
   return data;
 }
 
+
 export async function GET() {
   try {
+    const supabaseAdmin = createSupabaseAdmin(); // Create the client instance
+
     // Load watchlist items with any alert thresholds
     const { data: items, error: wlErr } = await supabaseAdmin
       .from('watchlist_items')
@@ -75,7 +79,7 @@ export async function GET() {
       }
     }
 
-    // Load user delivery preferences (phone & opt-in) for all involved users
+    // Load user delivery preferences
     const userIds = Array.from(new Set(interesting.map((w: any) => w.user_id)));
     const { data: profiles, error: pErr } = await supabaseAdmin
       .from('profiles')
@@ -95,7 +99,7 @@ export async function GET() {
       if (!lq) continue;
 
       const pr = prefs.get(w.user_id);
-      if (!pr?.sms) continue; // not opted-in
+      if (!pr?.sms) continue;
 
       const dest = pr.phone ? toBeemDest(pr.phone) : null;
       if (!dest) continue;
@@ -107,7 +111,6 @@ export async function GET() {
       for (const t of triggers) {
         if (!t.ok || t.threshold == null) continue;
 
-        // De-dup: only one alert per (item, date, rule)
         const { data: exists } = await supabaseAdmin
           .from('watchlist_alerts_sent')
           .select('id')
