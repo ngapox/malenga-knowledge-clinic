@@ -37,6 +37,7 @@ export async function GET() {
 
     let prices: { symbol: string; close: number }[] = [];
     
+   
     // Adjust to get yesterday's date
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
