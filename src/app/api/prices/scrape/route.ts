@@ -9,7 +9,9 @@ const DSE_HOMEPAGE_URL = 'https://dse.co.tz/';
 
 async function fetchAndParsePdf(pdfUrl: string) {
   try {
-    const response = await fetch(`http://localhost:3000/api/parse-pdf?url=${encodeURIComponent(pdfUrl)}`);
+    // We assume the Next.js app is running on localhost:3000 during development
+    const baseUrl = process.env.NODE_ENV === 'production' ? 'https://your-production-url.com' : 'http://localhost:3000';
+    const response = await fetch(`${baseUrl}/api/parse-pdf?url=${encodeURIComponent(pdfUrl)}`);
     if (!response.ok) {
       throw new Error(`Failed to parse PDF. Status: ${response.status}`);
     }
@@ -34,7 +36,12 @@ export async function GET() {
     const reportLink = $('a[href$=".pdf"][href*="Market-Report"]').first().attr('href');
 
     let prices: { symbol: string; close: number }[] = [];
-    const as_of_date = new Date().toISOString().slice(0, 10);
+    
+    // Adjust to get yesterday's date
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const as_of_date = yesterday.toISOString().slice(0, 10);
+
 
     if (reportLink) {
       const reportUrl = new URL(reportLink, DSE_HOMEPAGE_URL).href;
@@ -67,7 +74,6 @@ export async function GET() {
         }
       }
     } else {
-      // Fallback to table scraping if no PDF link is found
       $('table.table-market tbody tr, table tbody tr').each((i, row) => {
         const cols = $(row).find('td');
         if (cols.length >= 3) {
