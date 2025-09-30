@@ -3,7 +3,8 @@ import DailySummary from '@/components/DailySummary';
 
 async function getDailySummary() {
   try {
-    const res = await fetch('http://localhost:3000/api/daily-summary', { cache: 'no-store' });
+    // Use a relative path for the API call
+    const res = await fetch('/api/daily-summary', { cache: 'no-store' });
     if (!res.ok) {
       throw new Error('Failed to fetch daily summary');
     }

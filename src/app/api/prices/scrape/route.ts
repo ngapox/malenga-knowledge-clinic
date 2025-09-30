@@ -9,8 +9,8 @@ const DSE_HOMEPAGE_URL = 'https://dse.co.tz/';
 
 async function fetchAndParsePdf(pdfUrl: string) {
   try {
-    // We assume the Next.js app is running on localhost:3000 during development
-    const baseUrl = process.env.NODE_ENV === 'production' ? 'https://your-production-url.com' : 'http://localhost:3000';
+    // Use a relative path for the API call
+    const baseUrl = process.env.NODE_ENV === 'production' ? 'https://malenga-knowledge-clinic.vercel.app/' : 'http://localhost:3000';
     const response = await fetch(`${baseUrl}/api/parse-pdf?url=${encodeURIComponent(pdfUrl)}`);
     if (!response.ok) {
       throw new Error(`Failed to parse PDF. Status: ${response.status}`);
