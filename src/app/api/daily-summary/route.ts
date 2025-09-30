@@ -4,31 +4,59 @@ import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+async function getMarketData() {
   const supabaseAdmin = createSupabaseAdmin();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
 
-  const { data: prices, error } = await supabaseAdmin
+  const todayStr = today.toISOString().slice(0, 10);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+  const { data: todayPrices, error: todayError } = await supabaseAdmin
     .from('dse_quotes')
     .select('symbol, close')
-    .eq('as_of_date', today);
+    .eq('as_of_date', todayStr);
 
-  if (error) {
-    console.error('Error fetching prices from Supabase:', error);
-    return new NextResponse('Error fetching prices', { status: 500 });
+  if (todayError) {
+    console.error('Error fetching today\'s prices:', todayError);
+    return { todayPrices: [], yesterdayPrices: [] };
   }
 
-  // TODO: Replace with more sophisticated logic
-  const topNotes = prices && prices.length > 0
-    ? prices.slice(0, 2).map(p => `${p.symbol} closed at ${p.close}`)
-    : ['No prices available for today'];
+  const { data: yesterdayPrices, error: yesterdayError } = await supabaseAdmin
+    .from('dse_quotes')
+    .select('symbol, close')
+    .eq('as_of_date', yesterdayStr);
+
+  if (yesterdayError) {
+    console.error('Error fetching yesterday\'s prices:', yesterdayError);
+    return { todayPrices: todayPrices || [], yesterdayPrices: [] };
+  }
+
+  return { todayPrices: todayPrices || [], yesterdayPrices: yesterdayPrices || [] };
+}
+
+export async function GET() {
+  const { todayPrices, yesterdayPrices } = await getMarketData();
+
+  const priceChanges = todayPrices.map(todayPrice => {
+    const yesterdayPrice = yesterdayPrices.find(p => p.symbol === todayPrice.symbol);
+    if (yesterdayPrice) {
+      const change = todayPrice.close - yesterdayPrice.close;
+      const percentageChange = (change / yesterdayPrice.close) * 100;
+      return { ...todayPrice, change, percentageChange };
+    }
+    return { ...todayPrice, change: 0, percentageChange: 0 };
+  });
+
+  const gainers = priceChanges.filter(p => p.change > 0).sort((a, b) => b.percentageChange - a.percentageChange).slice(0, 3);
+  const losers = priceChanges.filter(p => p.change < 0).sort((a, b) => a.percentageChange - b.percentageChange).slice(0, 3);
 
   const summary = {
-    date: today,
-    market_snapshot: prices && prices.length > 0
-      ? `DSE market data for ${today}. ${prices.length} stocks updated.`
-      : 'No market data available for today.',
-    top_notes: topNotes,
+    date: new Date().toISOString().slice(0, 10),
+    market_snapshot: `DSE market data for today. ${todayPrices.length} stocks updated.`,
+    gainers,
+    losers,
     bonds: {
       upcoming: '15-year T-Bond auction next week',
       last_result: 'Prev auction oversubscribed (demo)',

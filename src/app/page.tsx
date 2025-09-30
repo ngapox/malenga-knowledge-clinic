@@ -1,32 +1,27 @@
-import Link from 'next/link';
+// src/app/page.tsx
 import DailySummary from '@/components/DailySummary';
 
-export default function Home() {
+async function getDailySummary() {
+  try {
+    const res = await fetch('http://localhost:3000/api/daily-summary', { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error('Failed to fetch daily summary');
+    }
+    return res.json();
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+export default async function Home() {
+  const summary = await getDailySummary();
+
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="text-3xl font-bold">Malenga Knowledge Clinic</h1>
-      <p className="mt-2 text-gray-600">
-        Learn investing in the Tanzanian context: bonds, DSE stocks, UTT, and more.
-      </p>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <Link href="/auth" className="rounded-xl border p-4 hover:bg-white">
-          <h2 className="font-semibold">Sign in / Create account →</h2>
-          <p className="text-sm text-gray-600">Save favorites, chat, and more.</p>
-        </Link>
-
-        <Link href="/chat" className="rounded-xl border p-4 hover:bg-white">
-          <h2 className="font-semibold">Public Chatrooms →</h2>
-          <p className="text-sm text-gray-600">Discuss bonds, stocks, UTT, opportunities.</p>
-        </Link>
-
-        <Link href="/calculators/bond" className="rounded-xl border p-4 hover:bg-white sm:col-span-2">
-          <h2 className="font-semibold">Bond Return Calculator →</h2>
-          <p className="text-sm text-gray-600">Coupons, current yield, and YTM (TZ).</p>
-        </Link>
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
+        {summary ? <DailySummary summary={summary} /> : <p>Loading summary...</p>}
       </div>
-
-      <DailySummary />
     </main>
   );
 }
