@@ -20,16 +20,13 @@ async function getPageData() {
     userName = profile?.full_name || null;
   }
   
-  // --- 👇 LOGGING ADDED HERE 👇 ---
-  console.log(`[PAGE LOG] Fetching daily summary from: ${baseUrl}/api/daily-summary`);
   const summaryRes = await fetch(`${baseUrl}/api/daily-summary`, { cache: 'no-store' });
-  
-  console.log('[PAGE LOG] Response Status:', summaryRes.status, summaryRes.statusText);
-  const responseText = await summaryRes.text();
-  console.log('[PAGE LOG] Response Text:', responseText.substring(0, 500)); // Log first 500 chars
-  // --- END LOGGING ---
-  
-  const summary = JSON.parse(responseText);
+  // Add a check in case the API fetch itself fails for network reasons
+  const summary = summaryRes.ok ? await summaryRes.json() : {
+      narrative: "Could not load market data.",
+      marketStatus: { isOpen: false, text: "Market status unknown" },
+      tickerData: [],
+  };
   
   const { data: articles } = await supabase
     .from('articles')
@@ -50,7 +47,6 @@ export default async function Home() {
       
       <MarketTicker data={summary.tickerData} />
 
-      {/* Today's Market, Explained */}
       <div className="text-center">
         <div className="flex items-center justify-center gap-2 mb-4">
           <span className={`h-3 w-3 rounded-full ${summary.marketStatus.isOpen ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
@@ -63,26 +59,24 @@ export default async function Home() {
         </p>
       </div>
 
-      {/* Discover Your Path */}
       <div className="space-y-4">
         <h2 className="text-3xl font-bold text-center">Discover Your Investment Path</h2>
         <div className="grid gap-6 md:grid-cols-3">
            <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><Briefcase /> UTT AMIS Funds</CardTitle></CardHeader>
-            <CardContent><p className="text-muted-foreground">Explore popular local funds for stable income or long-term growth. A great starting point for new investors.</p></CardContent>
+            <CardContent><p className="text-muted-foreground">Explore popular local funds for stable income or long-term growth.</p></CardContent>
           </Card>
            <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><BarChart2 /> DSE Blue Chips</CardTitle></CardHeader>
-            <CardContent><p className="text-muted-foreground">Invest in Tanzania's largest and most established companies listed on the Dar es Salaam Stock Exchange.</p></CardContent>
+            <CardContent><p className="text-muted-foreground">Invest in Tanzania's largest and most established companies.</p></CardContent>
           </Card>
            <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp /> Government Bonds</CardTitle></CardHeader>
-            <CardContent><p className="text-muted-foreground">Learn about Treasury bonds, a secure way to earn predictable returns backed by the government.</p></CardContent>
+            <CardContent><p className="text-muted-foreground">Learn about Treasury bonds, a secure way to earn predictable returns.</p></CardContent>
           </Card>
         </div>
       </div>
       
-      {/* Learn & Connect */}
       {articles && articles.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-3xl font-bold text-center">Learn & Connect</h2>
