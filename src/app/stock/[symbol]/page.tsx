@@ -1,56 +1,100 @@
-// src/app/stock/[symbol]/page.tsx
-"use client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
+import { StockChart } from "@/components/StockChart";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ExternalLink, Briefcase, BarChart2 } from "lucide-react";
 
-import { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+async function getStockData(symbol: string) {
+    const supabase = createSupabaseServerClient();
 
-/**
- * Minimal, build-friendly page. We intentionally allow an untyped `props`
- * to avoid Next's strict PageProps compile-time check.
- */
-export default function StockDetailPage(props: any) {
-  const symbol = props?.params?.symbol ?? '';
-  const [data, setData] = useState([]);
-  const [range, setRange] = useState('1m');
-  const [loading, setLoading] = useState(true);
+    // Fetch company profile and latest quote in parallel
+    const profilePromise = supabase.from('company_profiles').select('*').eq('symbol', symbol).single();
+    const latestQuotePromise = supabase.from('dse_quotes').select('close, as_of_date').eq('symbol', symbol).order('as_of_date', { ascending: false }).limit(1).single();
+    
+    // Fetch 52-week range data
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const rangePromise = supabase.from('dse_quotes').select('close').eq('symbol', symbol).gte('as_of_date', oneYearAgo.toISOString().split('T')[0]);
 
-  useEffect(() => {
-    if (!symbol) return;
-    async function fetchData() {
-      setLoading(true);
-      const res = await fetch(`/api/historical-data?symbol=${symbol}&range=${range}`);
-      const jsonData = await res.json();
-      setData(jsonData);
-      setLoading(false);
+    const [{data: profile}, {data: latestQuote}, {data: rangeData}] = await Promise.all([profilePromise, latestQuotePromise, rangePromise]);
+
+    if (!profile) {
+        // If there's no profile, we can decide if we still want to show the page or not.
+        // For now, let's say a profile is required.
+        return notFound();
     }
-    fetchData();
-  }, [symbol, range]);
+    
+    // Calculate 52-week high and low
+    let high52w = null;
+    let low52w = null;
+    if (rangeData && rangeData.length > 0) {
+        const prices = rangeData.map(r => r.close);
+        high52w = Math.max(...prices);
+        low52w = Math.min(...prices);
+    }
+    
+    return {
+        profile,
+        latestQuote,
+        metrics: {
+            high52w,
+            low52w,
+        }
+    };
+}
+
+export default async function StockDetailPage({ params }: { params: { symbol: string } }) {
+  const symbol = params.symbol.toUpperCase();
+  const { profile, latestQuote, metrics } = await getStockData(symbol);
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-6 md:p-24">
-      <div className="w-full max-w-5xl">
-        <h1 className="text-3xl font-bold mb-4">{symbol} Stock Performance</h1>
-        <div className="flex space-x-2 mb-4">
-          <button onClick={() => setRange('1m')} className={`px-4 py-2 rounded ${range === '1m' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>1M</button>
-          <button onClick={() => setRange('3m')} className={`px-4 py-2 rounded ${range === '3m' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>3M</button>
-          <button onClick={() => setRange('6m')} className={`px-4 py-2 rounded ${range === '6m' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>6M</button>
-          <button onClick={() => setRange('1y')} className={`px-4 py-2 rounded ${range === '1y' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}>1Y</button>
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+        <div>
+            <div className="flex items-center gap-4">
+                <h1 className="text-4xl font-bold">{profile.company_name}</h1>
+                <Badge variant="secondary" className="text-lg">{profile.symbol}</Badge>
+            </div>
+            <div className="flex items-center gap-4 mt-2 text-muted-foreground">
+                <div className="flex items-center gap-2"><Briefcase className="w-4 h-4" /> <span>{profile.sector}</span></div>
+                {profile.website && (
+                    <a href={profile.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-primary">
+                        <ExternalLink className="w-4 h-4" /> <span>Website</span>
+                    </a>
+                )}
+            </div>
         </div>
-        <div className="w-full h-96">
-          {loading ? <p>Loading chart...</p> : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="as_of_date" />
-                <YAxis domain={['dataMin', 'dataMax']} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="close" stroke="#8884d8" activeDot={{ r: 8 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+        <div className="text-right">
+            <p className="text-4xl font-bold">TZS {latestQuote?.close.toLocaleString() ?? 'N/A'}</p>
+            <p className="text-sm text-muted-foreground">As of {latestQuote ? new Date(latestQuote.as_of_date).toLocaleDateString() : 'N/A'}</p>
         </div>
       </div>
-    </main>
+
+      {/* Key Metrics Section */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+            <CardHeader><CardTitle className="text-base font-normal text-muted-foreground">52-Week High</CardTitle></CardHeader>
+            <CardContent><p className="text-2xl font-bold">{metrics.high52w ? metrics.high52w.toLocaleString() : 'N/A'}</p></CardContent>
+        </Card>
+        <Card>
+            <CardHeader><CardTitle className="text-base font-normal text-muted-foreground">52-Week Low</CardTitle></CardHeader>
+            <CardContent><p className="text-2xl font-bold">{metrics.low52w ? metrics.low52w.toLocaleString() : 'N/A'}</p></CardContent>
+        </Card>
+        {/* Add more metric cards here later, e.g., Market Cap, P/E Ratio */}
+      </div>
+
+      {/* About Section */}
+      <Card>
+        <CardHeader><CardTitle>About {profile.company_name}</CardTitle></CardHeader>
+        <CardContent>
+            <p className="text-muted-foreground whitespace-pre-line">{profile.description}</p>
+        </CardContent>
+      </Card>
+      
+      {/* Chart Section */}
+      <StockChart symbol={symbol} />
+    </div>
   );
 }
