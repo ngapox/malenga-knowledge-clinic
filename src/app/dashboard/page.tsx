@@ -2,7 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Newspaper, ChevronRight, Megaphone, FileText } from "lucide-react";
+import { Newspaper, ChevronRight, Megaphone, FileText, TrendingUp, TrendingDown } from "lucide-react";
 import Link from "next/link";
 
 // Define types for our data for better type safety
@@ -16,26 +16,62 @@ type Opportunity = {
   title: string | null;
   opportunity_type: string;
   action_date: string | null;
-  pdf_url: string | null; 
+  pdf_url: string | null;
+};
+
+type WatchlistItem = {
+  symbol: string;
+  latest_price: number | null;
+  change: number | null;
 };
 
 async function getDashboardData() {
   const supabase = createSupabaseServerClient();
-
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { redirect('/auth'); }
 
   const profilePromise = supabase.from('profiles').select('full_name').eq('id', user.id).single();
   const articlesPromise = supabase.from('articles').select('id, title').not('published_at', 'is', null).order('published_at', { ascending: false }).limit(3);
   const opportunitiesPromise = supabase.from('opportunities').select('id, title, opportunity_type, action_date, pdf_url').order('created_at', { ascending: false }).limit(3);
+  const watchlistPromise = supabase.from('watchlist_items').select('symbol').eq('user_id', user.id).limit(5);
 
-  const [{ data: profile }, { data: articles }, { data: opportunities }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: articles },
+    { data: opportunities },
+    { data: userWatchlist }
+  ] = await Promise.all([
     profilePromise,
     articlesPromise,
-    opportunitiesPromise
+    opportunitiesPromise,
+    watchlistPromise
   ]);
-  
-  const watchlistItems: any[] = [];
+
+  let watchlistItems: WatchlistItem[] = [];
+
+  if (userWatchlist && userWatchlist.length > 0) {
+    const symbols = userWatchlist.map(item => item.symbol);
+    const { data: quotes } = await supabase
+      .from('dse_quotes')
+      .select('symbol, close, as_of_date')
+      .in('symbol', symbols)
+      .order('as_of_date', { ascending: false });
+
+    const latestPrices: { [key: string]: number } = {};
+    if (quotes) {
+        for (const quote of quotes) {
+            if (!latestPrices[quote.symbol]) {
+                latestPrices[quote.symbol] = quote.close;
+            }
+        }
+    }
+    
+    watchlistItems = symbols.map(symbol => ({
+      symbol,
+      latest_price: latestPrices[symbol] || null,
+      change: null,
+    }));
+  }
 
   return {
     userName: profile?.full_name,
@@ -46,9 +82,9 @@ async function getDashboardData() {
 }
 
 export default async function DashboardPage() {
-  const { userName, articles, opportunities } = await getDashboardData();
+  const { userName, articles, opportunities, watchlistItems } = await getDashboardData();
   
-  // Helper function to format dates, placed inside the component
+  // --- 👇 THIS IS THE CORRECTED, COMPLETE FUNCTION 👇 ---
   const formatDate = (dateString: string | null): string => {
     if (!dateString) {
       return '';
@@ -59,28 +95,46 @@ export default async function DashboardPage() {
       year: 'numeric',
     });
   };
+  // --- 👆 END OF CORRECTION 👆 ---
 
   return (
     <div className="space-y-8">
-      <div>
+       <div>
         <h1 className="text-3xl font-bold">Welcome back, {userName?.split(' ')[0]}!</h1>
         <p className="text-muted-foreground">Here's your financial snapshot for today.</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Your Learning Path</CardTitle></CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">Your next recommended article is ready for you. Keep up the great work!</p>
-            <Button variant="link" className="px-0 mt-2">Continue Learning <ChevronRight className="w-4 h-4 ml-1" /></Button>
-          </CardContent>
+            <CardHeader><CardTitle>Your Learning Path</CardTitle></CardHeader>
+            <CardContent>
+                <p className="text-muted-foreground">Your next recommended article is ready for you. Keep up the great work!</p>
+                <Button variant="link" className="px-0 mt-2">Continue Learning <ChevronRight className="w-4 h-4 ml-1" /></Button>
+            </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Watchlist Snapshot</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Watchlist Snapshot</CardTitle>
+          </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">Your tracked stocks and funds at a glance.</p>
-            <Link href="/watchlist"><Button variant="link" className="px-0 mt-2">View Watchlist <ChevronRight className="w-4 h-4 ml-1" /></Button></Link>
+            {watchlistItems.length > 0 ? (
+              <ul className="space-y-2">
+                {watchlistItems.map(item => (
+                  <li key={item.symbol} className="flex justify-between items-center">
+                    <Link href={`/stock/${item.symbol}`} className="font-bold hover:underline">{item.symbol}</Link>
+                    <span className="font-mono">{item.latest_price ? `TZS ${item.latest_price.toLocaleString()}` : 'N/A'}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">You haven't added any items to your watchlist yet.</p>
+            )}
+            <Link href="/watchlist">
+              <Button variant="link" className="px-0 mt-2">
+                View Full Watchlist <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 
