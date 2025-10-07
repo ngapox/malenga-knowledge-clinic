@@ -1,9 +1,11 @@
+// src/app/admin/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 
+// ... (keep all the existing type definitions and functions like makeToken, etc.)
 type Room = {
   id: string;
   name: string;
@@ -31,7 +33,9 @@ function makeToken() {
     .join('');
 }
 
+
 export default function AdminPage() {
+  // ... (keep all the existing state declarations and useEffect hooks)
   const [userId, setUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -171,17 +175,24 @@ export default function AdminPage() {
     <main className="mx-auto max-w-5xl p-6 space-y-6">
       <h1 className="text-2xl font-bold">Admin Panel</h1>
 
-      <div className="rounded-2xl border bg-white p-4">
-        <Link href="/admin/prices" className="font-semibold text-blue-600 hover:underline">
-          → Go to DSE Prices Upload
-        </Link>
-        <Link href="/admin/articles" className="font-semibold text-blue-600 hover:underline">
+      {/* --- 👇 UPDATE THIS SECTION 👇 --- */}
+      <div className="rounded-2xl border bg-white p-4 flex flex-col space-y-2">
+        <Link href="/admin/articles" className="font-semibold text-primary hover:underline">
           → Manage Articles
         </Link>
+        <Link href="/admin/opportunities" className="font-semibold text-primary hover:underline">
+          → Manage Opportunities
+        </Link>
+        <Link href="/admin/prices" className="font-semibold text-primary hover:underline">
+          → Upload DSE Prices
+        </Link>
       </div>
+      {/* --- 👆 END OF UPDATE 👆 --- */}
+
 
       <section className="rounded-2xl border bg-white p-4">
         <h2 className="font-semibold">Create Room</h2>
+        {/* ... (the rest of the component remains the same) */}
         <div className="mt-3 flex gap-2">
           <input
             className="w-full rounded-lg border p-2"

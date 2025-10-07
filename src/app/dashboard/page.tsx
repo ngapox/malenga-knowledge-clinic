@@ -1,55 +1,67 @@
-// src/app/dashboard/page.tsx (Corrected Version)
+// src/app/dashboard/page.tsx
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Newspaper, ChevronRight } from "lucide-react";
+import { Newspaper, ChevronRight, Megaphone } from "lucide-react";
 import Link from "next/link";
 
-// Define a type for our articles for better type safety
+// Define types for our data for better type safety
 type Article = {
   id: string;
   title: string | null;
 };
 
-// We will build this out with more personalized data in the next steps.
+type Opportunity = {
+  id: string;
+  title: string | null;
+  opportunity_type: string;
+  action_date: string | null;
+};
+
 async function getDashboardData() {
   const supabase = createSupabaseServerClient();
 
   const { data: { user } } = await supabase.auth.getUser();
-
   if (!user) {
     redirect('/auth');
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', user.id)
-    .single();
+  const profilePromise = supabase.from('profiles').select('full_name').eq('id', user.id).single();
+  const articlesPromise = supabase.from('articles').select('id, title').not('published_at', 'is', null).order('published_at', { ascending: false }).limit(3);
+  
+  // --- 👇 FETCH OPPORTUNITIES DATA 👇 ---
+  const opportunitiesPromise = supabase.from('opportunities').select('id, title, opportunity_type, action_date').order('created_at', { ascending: false }).limit(3);
 
-  // --- FIX 1: Corrected the select query syntax ---
-  const { data: articles } = await supabase
-    .from('articles')
-    .select('id, title') // Was ('id', 'title'), now ('id, title')
-    .not('published_at', 'is', null)
-    .order('published_at', { ascending: false })
-    .limit(3);
-
-  // --- FIX 2: Added explicit types for the empty arrays ---
-  const opportunities: any[] = [];
+  // Await all promises together for better performance
+  const [{ data: profile }, { data: articles }, { data: opportunities }] = await Promise.all([
+    profilePromise,
+    articlesPromise,
+    opportunitiesPromise
+  ]);
+  
+  // Placeholder for future data
   const watchlistItems: any[] = [];
 
   return {
     userName: profile?.full_name,
-    articles: (articles as Article[]) || [], // Cast to our new Article type
-    opportunities,
+    articles: (articles as Article[]) || [],
+    opportunities: (opportunities as Opportunity[]) || [],
     watchlistItems,
   };
 }
 
 export default async function DashboardPage() {
-  const { userName, articles } = await getDashboardData();
+  const { userName, articles, opportunities } = await getDashboardData();
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
   return (
     <div className="space-y-8">
@@ -58,57 +70,55 @@ export default async function DashboardPage() {
         <p className="text-muted-foreground">Here's your financial snapshot for today.</p>
       </div>
 
-      {/* Main Dashboard Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Learning Path Card (Placeholder) */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Your Learning Path</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Your Learning Path</CardTitle></CardHeader>
           <CardContent>
             <p className="text-muted-foreground">Your next recommended article is ready for you. Keep up the great work!</p>
             <Button variant="link" className="px-0 mt-2">Continue Learning <ChevronRight className="w-4 h-4 ml-1" /></Button>
           </CardContent>
         </Card>
 
-        {/* Watchlist Summary Card (Placeholder) */}
         <Card>
-          <CardHeader>
-            <CardTitle>Watchlist Snapshot</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Watchlist Snapshot</CardTitle></CardHeader>
           <CardContent>
             <p className="text-muted-foreground">Your tracked stocks and funds at a glance.</p>
-             <Link href="/watchlist">
-                <Button variant="link" className="px-0 mt-2">View Watchlist <ChevronRight className="w-4 h-4 ml-1" /></Button>
-            </Link>
+            <Link href="/watchlist"><Button variant="link" className="px-0 mt-2">View Watchlist <ChevronRight className="w-4 h-4 ml-1" /></Button></Link>
           </CardContent>
         </Card>
-
-        {/* Opportunities Card (Placeholder) */}
+        
+        {/* --- 👇 UPDATE THIS CARD TO DISPLAY REAL DATA 👇 --- */}
         <Card>
           <CardHeader>
-            <CardTitle>New Opportunities</CardTitle>
+            <CardTitle className="flex items-center gap-2"><Megaphone /> New Opportunities</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">No new opportunities posted today. Check back soon!</p>
+            {opportunities.length > 0 ? (
+              <ul className="space-y-3">
+                {opportunities.map(op => (
+                  <li key={op.id} className="flex flex-col">
+                    <span className="font-semibold">{op.title}</span>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span className="bg-secondary px-2 py-0.5 rounded-md">{op.opportunity_type}</span>
+                      {op.action_date && <span>Action by: {formatDate(op.action_date)}</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted-foreground">No new opportunities posted today. Check back soon!</p>
+            )}
           </CardContent>
         </Card>
+        {/* --- 👆 END OF UPDATE 👆 --- */}
 
-        {/* Latest Articles Card */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Newspaper /> Latest Articles</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Newspaper /> Latest Articles</CardTitle></CardHeader>
           <CardContent>
             <ul className="space-y-2">
-                {/* --- FIX 3: Added a check for article.title --- */}
-                {articles.map(article => (
-                    <li key={article.id}>
-                        <Link href={`/article/${article.id}`} className="hover:underline text-primary">
-                        {article.title || 'Untitled Article'}
-                        </Link>
-                    </li>
-                ))}
+              {articles.map(article => (
+                <li key={article.id}><Link href={`/article/${article.id}`} className="hover:underline text-primary">{article.title || 'Untitled Article'}</Link></li>
+              ))}
             </ul>
           </CardContent>
         </Card>
