@@ -2,10 +2,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Newspaper, ChevronRight, Megaphone, FileText, BookOpen } from "lucide-react";
+import { Newspaper, ChevronRight, Megaphone, FileText, BookOpen, MessageSquare } from "lucide-react";
 import Link from "next/link";
 
-// --- Define more specific types for our data ---
+// Define types for our data
 type Article = {
   id: string;
   title: string | null;
@@ -24,7 +24,6 @@ type WatchlistItem = {
   latest_price: number | null;
 };
 
-// --- NEW: Define types for the Learning Path feature ---
 type LearningPath = {
   id: string;
   name: string | null;
@@ -36,6 +35,16 @@ type NextArticle = {
   title: string | null;
 };
 
+// --- Updated type definition ---
+// Based on Supabase query results, 'rooms' is returned as an array (even for one-to-one relationships).
+// We update the type to reflect this. Access the name via rooms[0]?.name if needed.
+type HotRoom = {
+    room_id: string;
+    recent_message_count: number;
+    rooms: { 
+        name: string | null;
+    }[]; 
+};
 
 async function getDashboardData() {
   const supabase = createSupabaseServerClient();
@@ -46,17 +55,13 @@ async function getDashboardData() {
   const articlesPromise = supabase.from('articles').select('id, title').not('published_at', 'is', null).order('published_at', { ascending: false }).limit(3);
   const opportunitiesPromise = supabase.from('opportunities').select('id, title, opportunity_type, action_date, pdf_url').order('created_at', { ascending: false }).limit(3);
   const watchlistPromise = supabase.from('watchlist_items').select('symbol').eq('user_id', user.id).limit(5);
-
   const userProgressPromise = supabase.from('user_progress').select('path_id, completed_step').eq('user_id', user.id).single();
+  const hotRoomsPromise = supabase.from('room_activity').select(`room_id, recent_message_count, rooms(name)`).order('recent_message_count', { ascending: false }).limit(3);
 
   const [
-    { data: profile },
-    { data: articles },
-    { data: opportunities },
-    { data: userWatchlist },
-    { data: userProgress }
+    { data: profile }, { data: articles }, { data: opportunities }, { data: userWatchlist }, { data: userProgress }, { data: hotRooms }
   ] = await Promise.all([
-    profilePromise, articlesPromise, opportunitiesPromise, watchlistPromise, userProgressPromise
+    profilePromise, articlesPromise, opportunitiesPromise, watchlistPromise, userProgressPromise, hotRoomsPromise
   ]);
 
   let currentPath: LearningPath | null = null;
@@ -64,46 +69,39 @@ async function getDashboardData() {
 
   if (userProgress) {
     const { data } = await supabase.from('learning_paths').select('id, name, path_articles(step_number, article_id)').eq('id', userProgress.path_id).single();
-    currentPath = data as any;
+    currentPath = data as LearningPath;
   } else {
     const { data } = await supabase.from('learning_paths').select('id, name, path_articles(step_number, article_id)').ilike('name', '%Beginner%').limit(1).single();
-    currentPath = data as any;
+    currentPath = data as LearningPath;
   }
 
   if (currentPath) {
     const completedStep = userProgress?.completed_step || 0;
     const nextStep = completedStep + 1;
     const nextPathArticle = currentPath.path_articles.find(p => p.step_number === nextStep);
-
     if (nextPathArticle) {
       const { data: articleData } = await supabase.from('articles').select('id, title').eq('id', nextPathArticle.article_id).single();
-      nextArticle = articleData;
+      nextArticle = articleData as NextArticle;
     }
   }
 
   let watchlistItems: WatchlistItem[] = [];
-    if (userWatchlist && userWatchlist.length > 0) {
-        const symbols = userWatchlist.map(item => item.symbol);
-        const { data: quotes } = await supabase
-        .from('dse_quotes')
-        .select('symbol, close, as_of_date')
-        .in('symbol', symbols)
-        .order('as_of_date', { ascending: false });
-
-        const latestPrices: { [key: string]: number } = {};
-        if (quotes) {
-            for (const quote of quotes) {
-                if (!latestPrices[quote.symbol]) {
-                    latestPrices[quote.symbol] = quote.close;
-                }
-            }
+  if (userWatchlist && userWatchlist.length > 0) {
+    const symbols = userWatchlist.map(item => item.symbol);
+    const { data: quotes } = await supabase.from('dse_quotes').select('symbol, close, as_of_date').in('symbol', symbols).order('as_of_date', { ascending: false });
+    const latestPrices: { [key: string]: number } = {};
+    if (quotes) {
+      for (const quote of quotes) {
+        if (!latestPrices[quote.symbol]) {
+          latestPrices[quote.symbol] = quote.close;
         }
-        
-        watchlistItems = symbols.map(symbol => ({
-          symbol,
-          latest_price: latestPrices[symbol] || null,
-        }));
+      }
     }
+    watchlistItems = symbols.map(symbol => ({
+      symbol,
+      latest_price: latestPrices[symbol] || null,
+    }));
+  }
 
   return {
     userName: profile?.full_name,
@@ -112,14 +110,14 @@ async function getDashboardData() {
     watchlistItems,
     currentPath,
     nextArticle,
-    userProgress: userProgress ? { ...userProgress, total_steps: currentPath?.path_articles.length || 0 } : null
+    userProgress: userProgress ? { ...userProgress, total_steps: currentPath?.path_articles.length || 0 } : null,
+    hotRooms: (hotRooms as HotRoom[]) || [],
   };
 }
 
 export default async function DashboardPage() {
-  const { userName, articles, opportunities, watchlistItems, currentPath, nextArticle, userProgress } = await getDashboardData();
+  const { userName, articles, opportunities, watchlistItems, currentPath, nextArticle, userProgress, hotRooms } = await getDashboardData();
   
-  // This is the fully implemented function that will fix the error.
   const formatDate = (dateString: string | null): string => {
     if (!dateString) {
       return '';
@@ -137,7 +135,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-       <div>
+      <div>
         <h1 className="text-3xl font-bold">Welcome back, {userName?.split(' ')[0]}!</h1>
         <p className="text-muted-foreground">Here's your financial snapshot for today.</p>
       </div>
@@ -193,6 +191,33 @@ export default async function DashboardPage() {
             <Link href="/watchlist">
               <Button variant="link" className="px-0 mt-2">
                 View Full Watchlist <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><MessageSquare /> Hot Conversations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {hotRooms.length > 0 ? (
+                <ul className="space-y-2">
+                    {hotRooms.map(room => (
+                        <li key={room.room_id}>
+                            <Link href="/chat" className="flex justify-between items-center p-2 rounded-md hover:bg-muted">
+                                <span className="font-semibold text-primary"># {room.rooms[0]?.name || 'Unknown Room'}</span>
+                                <span className="text-sm font-bold text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">{room.recent_message_count}</span>
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p className="text-sm text-muted-foreground">The community is quiet right now. Why not start a conversation?</p>
+            )}
+            <Link href="/chat">
+              <Button variant="link" className="px-0 mt-2">
+                Go to Chat <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
           </CardContent>
