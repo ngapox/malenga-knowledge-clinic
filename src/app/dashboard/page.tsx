@@ -1,9 +1,8 @@
-// src/app/dashboard/page.tsx
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Newspaper, ChevronRight, Megaphone } from "lucide-react";
+import { Newspaper, ChevronRight, Megaphone, FileText } from "lucide-react";
 import Link from "next/link";
 
 // Define types for our data for better type safety
@@ -17,30 +16,25 @@ type Opportunity = {
   title: string | null;
   opportunity_type: string;
   action_date: string | null;
+  pdf_url: string | null; 
 };
 
 async function getDashboardData() {
   const supabase = createSupabaseServerClient();
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    redirect('/auth');
-  }
+  if (!user) { redirect('/auth'); }
 
   const profilePromise = supabase.from('profiles').select('full_name').eq('id', user.id).single();
   const articlesPromise = supabase.from('articles').select('id, title').not('published_at', 'is', null).order('published_at', { ascending: false }).limit(3);
-  
-  // --- 👇 FETCH OPPORTUNITIES DATA 👇 ---
-  const opportunitiesPromise = supabase.from('opportunities').select('id, title, opportunity_type, action_date').order('created_at', { ascending: false }).limit(3);
+  const opportunitiesPromise = supabase.from('opportunities').select('id, title, opportunity_type, action_date, pdf_url').order('created_at', { ascending: false }).limit(3);
 
-  // Await all promises together for better performance
   const [{ data: profile }, { data: articles }, { data: opportunities }] = await Promise.all([
     profilePromise,
     articlesPromise,
     opportunitiesPromise
   ]);
   
-  // Placeholder for future data
   const watchlistItems: any[] = [];
 
   return {
@@ -53,9 +47,12 @@ async function getDashboardData() {
 
 export default async function DashboardPage() {
   const { userName, articles, opportunities } = await getDashboardData();
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '';
+  
+  // Helper function to format dates, placed inside the component
+  const formatDate = (dateString: string | null): string => {
+    if (!dateString) {
+      return '';
+    }
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -86,8 +83,7 @@ export default async function DashboardPage() {
             <Link href="/watchlist"><Button variant="link" className="px-0 mt-2">View Watchlist <ChevronRight className="w-4 h-4 ml-1" /></Button></Link>
           </CardContent>
         </Card>
-        
-        {/* --- 👇 UPDATE THIS CARD TO DISPLAY REAL DATA 👇 --- */}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Megaphone /> New Opportunities</CardTitle>
@@ -96,12 +92,20 @@ export default async function DashboardPage() {
             {opportunities.length > 0 ? (
               <ul className="space-y-3">
                 {opportunities.map(op => (
-                  <li key={op.id} className="flex flex-col">
+                  <li key={op.id} className="flex flex-col border-b last:border-b-0 pb-3 last:pb-0">
                     <span className="font-semibold">{op.title}</span>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground mt-1">
                       <span className="bg-secondary px-2 py-0.5 rounded-md">{op.opportunity_type}</span>
                       {op.action_date && <span>Action by: {formatDate(op.action_date)}</span>}
                     </div>
+                    {op.pdf_url && (
+                      <a href={op.pdf_url} target="_blank" rel="noopener noreferrer" className="mt-2">
+                        <Button variant="outline" size="sm" className="w-full">
+                          <FileText className="w-4 h-4 mr-2" />
+                          View Document
+                        </Button>
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -110,8 +114,7 @@ export default async function DashboardPage() {
             )}
           </CardContent>
         </Card>
-        {/* --- 👆 END OF UPDATE 👆 --- */}
-
+        
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="flex items-center gap-2"><Newspaper /> Latest Articles</CardTitle></CardHeader>
           <CardContent>
