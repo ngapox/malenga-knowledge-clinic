@@ -14,7 +14,7 @@ export default function AuthPage() {
   const router = useRouter();
   const [view, setView] = useState<'signIn' | 'signUp'>('signIn');
   
-  const [phone, setPhone] = useState('+255');
+  const [phone, setPhone] = useState(''); 
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   
@@ -36,8 +36,8 @@ export default function AuthPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.push('/');
-      router.refresh();
+      // --- 👇 USE FULL PAGE RELOAD FOR RELIABILITY 👇 ---
+      window.location.href = '/';
     }
   };
 
@@ -82,8 +82,8 @@ export default function AuthPage() {
       });
       if (sessionError) throw sessionError;
       
+      // A router push is fine here as the next page will handle the session
       router.push('/auth/complete-profile');
-      router.refresh();
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -106,7 +106,8 @@ export default function AuthPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255 XXX XXX XXX" />
+              {/* --- 👇 UPDATED PLACEHOLDER 👇 --- */}
+              <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255XXXXXXXXX" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -146,12 +147,13 @@ export default function AuthPage() {
             {signUpStep === 'phone' ? (
               <div className="space-y-2">
                 <Label htmlFor="phone-signup">Phone Number</Label>
+                {/* --- 👇 UPDATED PLACEHOLDER 👇 --- */}
                 <Input 
                   id="phone-signup" 
                   type="tel" 
                   value={phone} 
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+255 XXX XXX XXX" 
+                  placeholder="+255XXXXXXXXX" 
                 />
               </div>
             ) : (
