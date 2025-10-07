@@ -1,4 +1,7 @@
+// src/components/ReactionBar.tsx
 'use client';
+
+import { motion } from 'framer-motion';
 
 type ReactionEntry = { count: number; me: boolean };
 type Props = {
@@ -14,16 +17,20 @@ export default function ReactionBar({ reactions, onToggle }: Props) {
       {EMOJIS.map((e) => {
         const entry = reactions?.[e];
         return (
-          <button
+          <motion.button
             key={e}
             onClick={() => onToggle(e)}
-            className={`rounded-full border px-2 py-0.5 text-xs ${
-              entry?.me ? 'bg-black text-white' : 'bg-white'
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors duration-150 ${
+              entry?.me 
+                ? 'bg-primary/10 border-primary text-primary font-semibold' 
+                : 'bg-card hover:bg-muted/80'
             }`}
             title={entry?.count ? `${entry.count}` : '0'}
+            whileTap={{ scale: 0.9 }}
           >
-            {e} {entry?.count ? entry.count : ''}
-          </button>
+            <span>{e}</span>
+            {entry?.count ? <span className="text-xs">{entry.count}</span> : ''}
+          </motion.button>
         );
       })}
     </div>
