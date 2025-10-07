@@ -183,6 +183,9 @@ export default function AdminPage() {
         <Link href="/admin/opportunities" className="font-semibold text-primary hover:underline">
           → Manage Opportunities
         </Link>
+        <Link href="/admin/learning-paths" className="font-semibold text-primary hover:underline">
+          → Manage Learning Paths
+        </Link>
         <Link href="/admin/prices" className="font-semibold text-primary hover:underline">
           → Upload DSE Prices
         </Link>

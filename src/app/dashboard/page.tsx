@@ -2,10 +2,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Newspaper, ChevronRight, Megaphone, FileText, TrendingUp, TrendingDown } from "lucide-react";
+import { Newspaper, ChevronRight, Megaphone, FileText, BookOpen } from "lucide-react";
 import Link from "next/link";
 
-// Define types for our data for better type safety
+// --- Define more specific types for our data ---
 type Article = {
   id: string;
   title: string | null;
@@ -16,14 +16,26 @@ type Opportunity = {
   title: string | null;
   opportunity_type: string;
   action_date: string | null;
-  pdf_url: string | null;
+  pdf_url: string | null; 
 };
 
 type WatchlistItem = {
   symbol: string;
   latest_price: number | null;
-  change: number | null;
 };
+
+// --- NEW: Define types for the Learning Path feature ---
+type LearningPath = {
+  id: string;
+  name: string | null;
+  path_articles: { step_number: number, article_id: string }[];
+};
+
+type NextArticle = {
+  id: string;
+  title: string | null;
+};
+
 
 async function getDashboardData() {
   const supabase = createSupabaseServerClient();
@@ -35,56 +47,79 @@ async function getDashboardData() {
   const opportunitiesPromise = supabase.from('opportunities').select('id, title, opportunity_type, action_date, pdf_url').order('created_at', { ascending: false }).limit(3);
   const watchlistPromise = supabase.from('watchlist_items').select('symbol').eq('user_id', user.id).limit(5);
 
+  const userProgressPromise = supabase.from('user_progress').select('path_id, completed_step').eq('user_id', user.id).single();
+
   const [
     { data: profile },
     { data: articles },
     { data: opportunities },
-    { data: userWatchlist }
+    { data: userWatchlist },
+    { data: userProgress }
   ] = await Promise.all([
-    profilePromise,
-    articlesPromise,
-    opportunitiesPromise,
-    watchlistPromise
+    profilePromise, articlesPromise, opportunitiesPromise, watchlistPromise, userProgressPromise
   ]);
 
+  let currentPath: LearningPath | null = null;
+  let nextArticle: NextArticle | null = null;
+
+  if (userProgress) {
+    const { data } = await supabase.from('learning_paths').select('id, name, path_articles(step_number, article_id)').eq('id', userProgress.path_id).single();
+    currentPath = data as any;
+  } else {
+    const { data } = await supabase.from('learning_paths').select('id, name, path_articles(step_number, article_id)').ilike('name', '%Beginner%').limit(1).single();
+    currentPath = data as any;
+  }
+
+  if (currentPath) {
+    const completedStep = userProgress?.completed_step || 0;
+    const nextStep = completedStep + 1;
+    const nextPathArticle = currentPath.path_articles.find(p => p.step_number === nextStep);
+
+    if (nextPathArticle) {
+      const { data: articleData } = await supabase.from('articles').select('id, title').eq('id', nextPathArticle.article_id).single();
+      nextArticle = articleData;
+    }
+  }
+
   let watchlistItems: WatchlistItem[] = [];
+    if (userWatchlist && userWatchlist.length > 0) {
+        const symbols = userWatchlist.map(item => item.symbol);
+        const { data: quotes } = await supabase
+        .from('dse_quotes')
+        .select('symbol, close, as_of_date')
+        .in('symbol', symbols)
+        .order('as_of_date', { ascending: false });
 
-  if (userWatchlist && userWatchlist.length > 0) {
-    const symbols = userWatchlist.map(item => item.symbol);
-    const { data: quotes } = await supabase
-      .from('dse_quotes')
-      .select('symbol, close, as_of_date')
-      .in('symbol', symbols)
-      .order('as_of_date', { ascending: false });
-
-    const latestPrices: { [key: string]: number } = {};
-    if (quotes) {
-        for (const quote of quotes) {
-            if (!latestPrices[quote.symbol]) {
-                latestPrices[quote.symbol] = quote.close;
+        const latestPrices: { [key: string]: number } = {};
+        if (quotes) {
+            for (const quote of quotes) {
+                if (!latestPrices[quote.symbol]) {
+                    latestPrices[quote.symbol] = quote.close;
+                }
             }
         }
+        
+        watchlistItems = symbols.map(symbol => ({
+          symbol,
+          latest_price: latestPrices[symbol] || null,
+        }));
     }
-    
-    watchlistItems = symbols.map(symbol => ({
-      symbol,
-      latest_price: latestPrices[symbol] || null,
-      change: null,
-    }));
-  }
 
   return {
     userName: profile?.full_name,
     articles: (articles as Article[]) || [],
     opportunities: (opportunities as Opportunity[]) || [],
     watchlistItems,
+    currentPath,
+    nextArticle,
+    userProgress: userProgress ? { ...userProgress, total_steps: currentPath?.path_articles.length || 0 } : null
   };
 }
 
 export default async function DashboardPage() {
-  const { userName, articles, opportunities, watchlistItems } = await getDashboardData();
+  const { userName, articles, opportunities, watchlistItems, currentPath, nextArticle, userProgress } = await getDashboardData();
   
-  // --- 👇 THIS IS THE CORRECTED, COMPLETE FUNCTION 👇 ---
+  // This is the fully implemented function that will fix the error.
   const formatDate = (dateString: string | null): string => {
     if (!dateString) {
       return '';
@@ -95,7 +130,10 @@ export default async function DashboardPage() {
       year: 'numeric',
     });
   };
-  // --- 👆 END OF CORRECTION 👆 ---
+
+  const progressPercentage = userProgress && userProgress.total_steps > 0
+    ? (userProgress.completed_step / userProgress.total_steps) * 100
+    : 0;
 
   return (
     <div className="space-y-8">
@@ -106,10 +144,32 @@ export default async function DashboardPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-            <CardHeader><CardTitle>Your Learning Path</CardTitle></CardHeader>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><BookOpen/> Your Learning Path</CardTitle>
+            </CardHeader>
             <CardContent>
-                <p className="text-muted-foreground">Your next recommended article is ready for you. Keep up the great work!</p>
-                <Button variant="link" className="px-0 mt-2">Continue Learning <ChevronRight className="w-4 h-4 ml-1" /></Button>
+                {currentPath && nextArticle ? (
+                    <div>
+                        <p className="text-sm font-semibold text-muted-foreground">{currentPath.name}</p>
+                        <p className="mt-2">Your next step is to read:</p>
+                        <Link href={`/article/${nextArticle.id}`} className="block my-1">
+                            <Button variant="link" className="px-0 h-auto text-lg text-left whitespace-normal">{nextArticle.title}</Button>
+                        </Link>
+                        {userProgress && (
+                            <div className="mt-4">
+                                <div className="flex justify-between text-sm text-muted-foreground mb-1">
+                                    <span>Progress</span>
+                                    <span>Step {userProgress.completed_step} of {userProgress.total_steps}</span>
+                                </div>
+                                <div className="w-full bg-muted rounded-full h-2.5">
+                                    <div className="bg-primary h-2.5 rounded-full" style={{ width: `${progressPercentage}%` }}></div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <p className="text-muted-foreground">Your learning journey starts here. We'll recommend articles to get you started soon!</p>
+                )}
             </CardContent>
         </Card>
 
