@@ -20,13 +20,20 @@ async function getPageData() {
     userName = profile?.full_name || null;
   }
   
+  // --- 👇 LOGGING ADDED HERE 👇 ---
+  console.log(`[PAGE LOG] Fetching daily summary from: ${baseUrl}/api/daily-summary`);
   const summaryRes = await fetch(`${baseUrl}/api/daily-summary`, { cache: 'no-store' });
-  const summary = await summaryRes.json();
   
-  // --- 👇 THIS IS THE CORRECTED SUPABASE QUERY 👇 ---
+  console.log('[PAGE LOG] Response Status:', summaryRes.status, summaryRes.statusText);
+  const responseText = await summaryRes.text();
+  console.log('[PAGE LOG] Response Text:', responseText.substring(0, 500)); // Log first 500 chars
+  // --- END LOGGING ---
+  
+  const summary = JSON.parse(responseText);
+  
   const { data: articles } = await supabase
     .from('articles')
-    .select('id, title, published_at') // Corrected this line
+    .select('id, title, published_at')
     .not('published_at', 'is', null)
     .order('published_at', { ascending: false })
     .limit(3);
