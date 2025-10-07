@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Briefcase, BarChart2, TrendingUp } from "lucide-react";
 
 async function getPageData() {
+  console.log("--- [HOME PAGE] getPageData started ---");
   const supabase = createSupabaseServerClient();
   
   const baseUrl = process.env.VERCEL_URL
@@ -14,6 +15,11 @@ async function getPageData() {
     : 'http://localhost:3000';
   
   const { data: { user } } = await supabase.auth.getUser();
+  if(user) {
+    console.log(`[HOME PAGE] User session FOUND. User ID: ${user.id}`);
+  } else {
+    console.log("[HOME PAGE] User session NOT FOUND.");
+  }
   let userName: string | null = null;
   if (user) {
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();

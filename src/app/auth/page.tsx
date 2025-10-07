@@ -24,23 +24,29 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSignIn = async () => {
+    console.log('--- [AUTH PAGE] handleSignIn started ---');
     setError(null);
     setLoading(true);
     
+    console.log('[AUTH PAGE] Step 1: Calling supabase.auth.signInWithPassword...');
     const { error } = await supabase.auth.signInWithPassword({
       phone: phone,
       password: password,
     });
 
     if (error) {
+      console.error('[AUTH PAGE] Step 2 FAILED: Supabase returned an error:', error);
       setError(error.message);
       setLoading(false);
     } else {
-      // --- 👇 USE FULL PAGE RELOAD FOR RELIABILITY 👇 ---
+      console.log('[AUTH PAGE] Step 2 SUCCESS: Sign-in successful.');
+      console.log('[AUTH PAGE] Step 3: Redirecting with full page reload to /');
+      // Using a full page reload is the most reliable way to ensure the server gets the new cookie
       window.location.href = '/';
     }
   };
 
+  // ... (the rest of the functions remain the same)
   const handleSendOtp = async () => {
     setError(null);
     setLoading(true);
@@ -54,11 +60,8 @@ export default function AuthPage() {
       if (!response.ok) throw new Error(result.message);
       setSignUpStep('otp');
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unknown error occurred.");
-      }
+      if (err instanceof Error) setError(err.message);
+      else setError("An unknown error occurred.");
     } finally {
       setLoading(false);
     }
@@ -82,14 +85,10 @@ export default function AuthPage() {
       });
       if (sessionError) throw sessionError;
       
-      // A router push is fine here as the next page will handle the session
       router.push('/auth/complete-profile');
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unknown error occurred.");
-      }
+      if (err instanceof Error) setError(err.message);
+      else setError("An unknown error occurred.");
     } finally {
       setLoading(false);
     }
@@ -106,14 +105,12 @@ export default function AuthPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              {/* --- 👇 UPDATED PLACEHOLDER 👇 --- */}
               <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255XXXXXXXXX" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
-
             <div className="flex items-center justify-end">
               <Link href="/auth/forgot-password" passHref>
                 <Button variant="link" size="sm" className="p-0 h-auto">
@@ -138,23 +135,14 @@ export default function AuthPage() {
           <CardHeader className="text-center">
             <CardTitle>Create an Account</CardTitle>
             <CardDescription>
-              {signUpStep === 'phone'
-                ? 'Enter your phone number to begin.'
-                : `We sent a code to ${phone}.`}
+              {signUpStep === 'phone' ? 'Enter your phone number to begin.' : `We sent a code to ${phone}.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {signUpStep === 'phone' ? (
               <div className="space-y-2">
                 <Label htmlFor="phone-signup">Phone Number</Label>
-                {/* --- 👇 UPDATED PLACEHOLDER 👇 --- */}
-                <Input 
-                  id="phone-signup" 
-                  type="tel" 
-                  value={phone} 
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+255XXXXXXXXX" 
-                />
+                <Input id="phone-signup" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255XXXXXXXXX" />
               </div>
             ) : (
               <div className="space-y-2">

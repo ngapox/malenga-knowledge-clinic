@@ -6,8 +6,14 @@ import LogoutButton from "./LogoutButton";
 import { Button } from "./ui/button";
 
 export default async function NavBar() {
+  console.log("--- [NAVBAR] Rendering ---");
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if(user) {
+    console.log(`[NAVBAR] User session FOUND. User ID: ${user.id}`);
+  } else {
+    console.log("[NAVBAR] User session NOT FOUND.");
+  }
 
   // --- 👇 NEW: Fetch the user's profile to check for admin status 👇 ---
   let isAdmin = false;
