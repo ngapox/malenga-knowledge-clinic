@@ -9,7 +9,6 @@ import { Briefcase, BarChart2, TrendingUp } from "lucide-react";
 async function getPageData() {
   const supabase = createSupabaseServerClient();
   
-  // --- 👇 CORRECTED BASE URL LOGIC IS HERE 👇 ---
   const baseUrl = process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000';
@@ -21,8 +20,16 @@ async function getPageData() {
     userName = profile?.full_name || null;
   }
   
+  // --- 👇 LOGGING ADDED HERE 👇 ---
   const summaryRes = await fetch(`${baseUrl}/api/daily-summary`, { cache: 'no-store' });
-  const summary = await summaryRes.json();
+  
+  console.log('--- [DEBUG] DAILY SUMMARY FETCH ---');
+  console.log('Response Status:', summaryRes.status, summaryRes.statusText);
+  const responseText = await summaryRes.text(); // Get response as text to log it
+  console.log('Response Text:', responseText);
+  // --- END LOGGING ---
+  
+  const summary = JSON.parse(responseText); // Parse the text we logged
   
   const { data: articles } = await supabase
     .from('articles')
@@ -37,6 +44,7 @@ async function getPageData() {
 export default async function Home() {
   const { summary, articles, userName } = await getPageData();
 
+  // ... (the rest of your component remains the same)
   return (
     <div className="space-y-12">
       <HomePageClient userName={userName} />
