@@ -38,47 +38,27 @@ export default function CompleteProfilePage() {
   }, [router]);
 
   const handleSave = async () => {
-    console.log('--- [DEBUG] Starting handleSave ---');
     setError(null);
-    setSaving(true);
 
-    // --- 1. Validation ---
-    console.log('[DEBUG] Step 1: Validating input...');
     if (!userId || !fullName || !phone || !password) {
-      const msg = 'Validation failed: Please fill in all fields.';
-      setError(msg);
-      console.error(`[DEBUG] ${msg}`);
-      setSaving(false);
+      setError('Please fill in all fields.');
       return;
     }
     if (password !== confirmPassword) {
-      const msg = 'Validation failed: Passwords do not match.';
-      setError(msg);
-      console.error(`[DEBUG] ${msg}`);
-      setSaving(false);
+      setError('Passwords do not match.');
       return;
     }
     if (password.length < 6) {
-      const msg = 'Validation failed: Password must be at least 6 characters long.';
-      setError(msg);
-      console.error(`[DEBUG] ${msg}`);
-      setSaving(false);
-      return;
+        setError('Password must be at least 6 characters long.');
+        return;
     }
-    console.log('[DEBUG] Step 1: Validation successful.');
+
+    setSaving(true);
 
     try {
-      // --- 2. Update Password in Supabase Auth ---
-      console.log('[DEBUG] Step 2: Attempting to update user password in Supabase Auth...');
       const { error: authError } = await supabase.auth.updateUser({ password: password });
-      if (authError) {
-        console.error('[DEBUG] Step 2 FAILED: Error updating password in Auth.', authError);
-        throw authError; // This will stop the process and jump to the catch block
-      }
-      console.log('[DEBUG] Step 2: Password updated successfully in Supabase Auth.');
+      if (authError) throw authError;
 
-      // --- 3. Update Public Profile ---
-      console.log('[DEBUG] Step 3: Attempting to update public profile...');
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -86,24 +66,19 @@ export default function CompleteProfilePage() {
           phone_e164: phone,
         })
         .eq('id', userId);
-
-      if (profileError) {
-        console.error('[DEBUG] Step 3 FAILED: Error updating public profile.', profileError);
-        throw profileError; // Jump to the catch block
-      }
-      console.log('[DEBUG] Step 3: Public profile updated successfully.');
-
-      // --- 4. Success and Redirect ---
-      console.log('[DEBUG] Step 4: Profile completion successful. Redirecting...');
-      alert('Profile completed! You can now log in with your phone and password.');
-      window.location.href = '/';
+      if (profileError) throw profileError;
+      
+      // --- 👇 THIS IS THE CORRECTED REDIRECT LOGIC 👇 ---
+      alert('Profile completed! Redirecting to the homepage.');
+      // Use router.push for client-side navigation
+      router.push('/');
+      // Then, refresh the page to ensure server components get the new session
+      router.refresh();
 
     } catch (err: any) {
-      console.error('[DEBUG] An error occurred in the try-catch block:', err);
       setError(err.message);
     } finally {
       setSaving(false);
-      console.log('--- [DEBUG] handleSave finished ---');
     }
   };
 

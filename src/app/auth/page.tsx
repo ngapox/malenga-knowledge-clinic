@@ -12,21 +12,17 @@ import Link from 'next/link';
 
 export default function AuthPage() {
   const router = useRouter();
-  // --- 👇 NEW STATE TO TOGGLE BETWEEN VIEWS 👇 ---
   const [view, setView] = useState<'signIn' | 'signUp'>('signIn');
   
-  // State for both flows
   const [phone, setPhone] = useState('+255');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   
-  // State for the multi-step sign-up flow
   const [signUpStep, setSignUpStep] = useState<'phone' | 'otp'>('phone');
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // --- 👇 NEW: HANDLER FOR PHONE/PASSWORD SIGN IN 👇 ---
   const handleSignIn = async () => {
     setError(null);
     setLoading(true);
@@ -38,14 +34,13 @@ export default function AuthPage() {
 
     if (error) {
       setError(error.message);
+      setLoading(false);
     } else {
-      // Success! Use a full page reload to ensure server components refresh.
-      window.location.href = '/';
+      router.push('/');
+      router.refresh();
     }
-    setLoading(false);
   };
 
-  // --- REPURPOSED: HANDLERS FOR THE SIGN-UP OTP FLOW ---
   const handleSendOtp = async () => {
     setError(null);
     setLoading(true);
@@ -58,8 +53,12 @@ export default function AuthPage() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.message);
       setSignUpStep('otp');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An unknown error occurred.");
+      }
     } finally {
       setLoading(false);
     }
@@ -83,10 +82,14 @@ export default function AuthPage() {
       });
       if (sessionError) throw sessionError;
       
-      // On successful sign-up, the middleware will redirect to /auth/complete-profile
       router.push('/auth/complete-profile');
-    } catch (err: any) {
-      setError(err.message);
+      router.refresh();
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An unknown error occurred.");
+      }
     } finally {
       setLoading(false);
     }
@@ -95,7 +98,6 @@ export default function AuthPage() {
   return (
     <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
       {view === 'signIn' ? (
-        // --- SIGN IN FORM (DEFAULT) ---
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             <CardTitle>Welcome Back</CardTitle>
@@ -104,7 +106,7 @@ export default function AuthPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+255 XXX XXX XXX" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -131,7 +133,6 @@ export default function AuthPage() {
           </CardContent>
         </Card>
       ) : (
-        // --- SIGN UP FORM (OTP FLOW) ---
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             <CardTitle>Create an Account</CardTitle>
@@ -145,7 +146,13 @@ export default function AuthPage() {
             {signUpStep === 'phone' ? (
               <div className="space-y-2">
                 <Label htmlFor="phone-signup">Phone Number</Label>
-                <Input id="phone-signup" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input 
+                  id="phone-signup" 
+                  type="tel" 
+                  value={phone} 
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+255 XXX XXX XXX" 
+                />
               </div>
             ) : (
               <div className="space-y-2">
