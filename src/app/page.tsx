@@ -8,8 +8,10 @@ import { Briefcase, BarChart2, TrendingUp } from "lucide-react";
 
 async function getPageData() {
   const supabase = createSupabaseServerClient();
-  const baseUrl = process.env.NODE_ENV === 'production'
-    ? 'https://malenga-app-pi.vercel.app/' // Replace with your production URL
+  
+  // --- 👇 CORRECTED BASE URL LOGIC IS HERE 👇 ---
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000';
   
   const { data: { user } } = await supabase.auth.getUser();
@@ -43,7 +45,6 @@ export default async function Home() {
 
       {/* Today's Market, Explained */}
       <div className="text-center">
-        {/* --- 👇 NEW MARKET STATUS INDICATOR 👇 --- */}
         <div className="flex items-center justify-center gap-2 mb-4">
           <span className={`h-3 w-3 rounded-full ${summary.marketStatus.isOpen ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
           <span className="text-sm font-medium text-muted-foreground">{summary.marketStatus.text}</span>
