@@ -14,7 +14,6 @@ export default function CompleteProfilePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  // --- 👇 NEW STATE FOR PASSWORD 👇 ---
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
@@ -39,30 +38,47 @@ export default function CompleteProfilePage() {
   }, [router]);
 
   const handleSave = async () => {
+    console.log('--- [DEBUG] Starting handleSave ---');
     setError(null);
+    setSaving(true);
 
-    // --- 👇 UPDATED VALIDATION 👇 ---
+    // --- 1. Validation ---
+    console.log('[DEBUG] Step 1: Validating input...');
     if (!userId || !fullName || !phone || !password) {
-      setError('Please fill in all fields.');
+      const msg = 'Validation failed: Please fill in all fields.';
+      setError(msg);
+      console.error(`[DEBUG] ${msg}`);
+      setSaving(false);
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      const msg = 'Validation failed: Passwords do not match.';
+      setError(msg);
+      console.error(`[DEBUG] ${msg}`);
+      setSaving(false);
       return;
     }
     if (password.length < 6) {
-        setError('Password must be at least 6 characters long.');
-        return;
+      const msg = 'Validation failed: Password must be at least 6 characters long.';
+      setError(msg);
+      console.error(`[DEBUG] ${msg}`);
+      setSaving(false);
+      return;
     }
-
-    setSaving(true);
+    console.log('[DEBUG] Step 1: Validation successful.');
 
     try {
-      // Step 1: Update the user's password in Supabase Auth
+      // --- 2. Update Password in Supabase Auth ---
+      console.log('[DEBUG] Step 2: Attempting to update user password in Supabase Auth...');
       const { error: authError } = await supabase.auth.updateUser({ password: password });
-      if (authError) throw authError;
+      if (authError) {
+        console.error('[DEBUG] Step 2 FAILED: Error updating password in Auth.', authError);
+        throw authError; // This will stop the process and jump to the catch block
+      }
+      console.log('[DEBUG] Step 2: Password updated successfully in Supabase Auth.');
 
-      // Step 2: Update the public profile information
+      // --- 3. Update Public Profile ---
+      console.log('[DEBUG] Step 3: Attempting to update public profile...');
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -70,16 +86,24 @@ export default function CompleteProfilePage() {
           phone_e164: phone,
         })
         .eq('id', userId);
-      if (profileError) throw profileError;
 
-      // Step 3: Success! Redirect to the main app.
+      if (profileError) {
+        console.error('[DEBUG] Step 3 FAILED: Error updating public profile.', profileError);
+        throw profileError; // Jump to the catch block
+      }
+      console.log('[DEBUG] Step 3: Public profile updated successfully.');
+
+      // --- 4. Success and Redirect ---
+      console.log('[DEBUG] Step 4: Profile completion successful. Redirecting...');
       alert('Profile completed! You can now log in with your phone and password.');
       window.location.href = '/';
 
     } catch (err: any) {
+      console.error('[DEBUG] An error occurred in the try-catch block:', err);
       setError(err.message);
     } finally {
       setSaving(false);
+      console.log('--- [DEBUG] handleSave finished ---');
     }
   };
 
@@ -113,7 +137,6 @@ export default function CompleteProfilePage() {
               className="bg-muted"
             />
           </div>
-          {/* --- 👇 NEW PASSWORD FIELDS 👇 --- */}
           <div className="space-y-2">
             <Label htmlFor="password">Create Password</Label>
             <Input
@@ -132,7 +155,6 @@ export default function CompleteProfilePage() {
               onChange={(e) => setConfirmPassword(e.target.value)}
             />
           </div>
-
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
