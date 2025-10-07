@@ -180,6 +180,12 @@ export default function AdminPage() {
         <Link href="/admin/articles" className="font-semibold text-primary hover:underline">
           → Manage Articles
         </Link>
+        <Link href="/admin/badges" className="font-semibold text-primary hover:underline">
+          → Manage Badges
+        </Link>
+        <Link href="/admin/company-profiles" className="font-semibold text-primary hover:underline">
+          → Manage Company Profiles
+        </Link>
         <Link href="/admin/opportunities" className="font-semibold text-primary hover:underline">
           → Manage Opportunities
         </Link>
