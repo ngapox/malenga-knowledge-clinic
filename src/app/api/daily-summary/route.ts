@@ -4,12 +4,11 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
-// Function to determine if the DSE is currently open
 function getMarketStatus() {
     const now = new Date();
     const eatTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
     
-    const dayOfWeek = eatTime.getDay(); // Sunday = 0, Saturday = 6
+    const dayOfWeek = eatTime.getDay();
     const hour = eatTime.getHours();
     const minute = eatTime.getMinutes();
     
@@ -22,7 +21,6 @@ function getMarketStatus() {
     return { isOpen: false, text: "Market is currently CLOSED" };
 }
 
-// Rewritten function to always get the last two trading days
 async function getMarketData() {
     const supabase = supabaseAdmin;
 
@@ -46,6 +44,7 @@ async function getMarketData() {
         .limit(1)
         .single();
         
+    // --- 👇 THIS IS THE CORRECTED LOGIC 👇 ---
     const previousDate = previousDateData?.as_of_date;
 
     const datesToFetch = [latestDate];
@@ -66,7 +65,6 @@ async function getMarketData() {
     return { latestPrices, previousPrices, latestDate };
 }
 
-// --- 👇 THIS IS THE CORRECTED NARRATIVE FUNCTION 👇 ---
 function generateNarrative(latestDate: string, latestPrices: any[], gainers: any[], losers: any[]): string {
     const dateString = new Date(latestDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -76,9 +74,9 @@ function generateNarrative(latestDate: string, latestPrices: any[], gainers: any
 
     let narrative = `Here is the summary for the last trading day, ${dateString}. We tracked updates for ${latestPrices.length} companies. `;
 
-    if (gainers.length > losers.length && gainers.length > 0) {
+    if (gainers.length > 0 && gainers.length >= losers.length) {
         narrative += `It was a positive session, led by gains in stocks like ${gainers[0].symbol}. `;
-    } else if (losers.length > gainers.length && losers.length > 0) {
+    } else if (losers.length > 0) {
         narrative += `The market saw a slight downturn, with stocks like ${losers[0].symbol} pulling back. `;
     } else {
         narrative += "The market remained relatively stable with no major price movements. ";
@@ -86,7 +84,6 @@ function generateNarrative(latestDate: string, latestPrices: any[], gainers: any
     
     return narrative;
 }
-
 
 export async function GET() {
     try {
@@ -108,7 +105,6 @@ export async function GET() {
         const narrative = generateNarrative(latestDate, latestPrices, gainers, losers);
         const marketStatus = getMarketStatus();
 
-        // Ensure tickerData always has some data or is an empty array
         const popularTickers = ['CRDB', 'NMB', 'TBL', 'VODA', 'TPCC'];
         const tickerData = priceChanges.filter(p => popularTickers.includes(p.symbol));
 

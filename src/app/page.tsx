@@ -20,20 +20,13 @@ async function getPageData() {
     userName = profile?.full_name || null;
   }
   
-  // --- 👇 LOGGING ADDED HERE 👇 ---
   const summaryRes = await fetch(`${baseUrl}/api/daily-summary`, { cache: 'no-store' });
+  const summary = await summaryRes.json();
   
-  console.log('--- [DEBUG] DAILY SUMMARY FETCH ---');
-  console.log('Response Status:', summaryRes.status, summaryRes.statusText);
-  const responseText = await summaryRes.text(); // Get response as text to log it
-  console.log('Response Text:', responseText);
-  // --- END LOGGING ---
-  
-  const summary = JSON.parse(responseText); // Parse the text we logged
-  
+  // --- 👇 THIS IS THE CORRECTED SUPABASE QUERY 👇 ---
   const { data: articles } = await supabase
     .from('articles')
-    .select('id, title, published_at')
+    .select('id, title, published_at') // Corrected this line
     .not('published_at', 'is', null)
     .order('published_at', { ascending: false })
     .limit(3);
@@ -44,7 +37,6 @@ async function getPageData() {
 export default async function Home() {
   const { summary, articles, userName } = await getPageData();
 
-  // ... (the rest of your component remains the same)
   return (
     <div className="space-y-12">
       <HomePageClient userName={userName} />
