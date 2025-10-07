@@ -1,6 +1,6 @@
 // --- File: src/app/api/alerts/check/route.ts ---
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +38,6 @@ async function sendSMS(dest: string, text: string) {
 
 export async function GET() {
   try {
-    const supabaseAdmin = createSupabaseAdmin();
     const { data: items, error: wlErr } = await supabaseAdmin
       .from('watchlist_items')
       .select('id, user_id, symbol, alert_above, alert_below');

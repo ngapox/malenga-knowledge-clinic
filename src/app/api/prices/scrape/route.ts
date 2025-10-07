@@ -1,7 +1,7 @@
 // --- File: src/app/api/prices/scrape/route.ts ---
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,7 +90,6 @@ export async function GET() {
     }
 
     if (prices.length > 0) {
-      const supabaseAdmin = createSupabaseAdmin();
       const recordsToUpsert = prices.map(p => ({
         symbol: p.symbol,
         as_of_date,

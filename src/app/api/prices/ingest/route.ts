@@ -1,11 +1,11 @@
+// src/app/api/prices/ingest/route.ts
 import { NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
-    const supabaseAdmin = createSupabaseAdmin();
     const body = await req.json();
     const as_of_date = body?.as_of_date;
     const rows: { symbol: string; close: number }[] = body?.rows || [];

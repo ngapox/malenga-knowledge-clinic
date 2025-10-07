@@ -1,6 +1,6 @@
 // src/app/api/historical-data/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
     return new NextResponse('Missing stock symbol parameter', { status: 400 });
   }
 
-  const supabaseAdmin = createSupabaseAdmin();
   const today = new Date();
   let startDate = new Date();
 

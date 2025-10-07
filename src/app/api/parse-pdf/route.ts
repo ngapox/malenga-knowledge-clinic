@@ -1,6 +1,7 @@
-// --- File: src/app/api/parse-pdf/route.ts ---
+// src/app/api/parse-pdf/route.ts
+export const runtime = 'nodejs'; // ensure this runs in Node runtime, not Edge
+
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFExtract } from 'pdf.js-extract';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -11,21 +12,23 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // dynamic import works robustly for CommonJS packages
+    const pdfModule = await import('pdf-parse');
+    // pdfModule.default for ESM interop, or module itself for CJS
+    const pdf = (pdfModule as any).default ?? pdfModule;
+
     const response = await fetch(pdfUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch PDF from ${pdfUrl}. Status: ${response.status}`);
     }
 
     const pdfBuffer = await response.arrayBuffer();
-    const pdfExtractor = new PDFExtract();
-    const data = await pdfExtractor.extractBuffer(Buffer.from(pdfBuffer));
+    // pdf-parse expects a Buffer when running under Node
+    const data = await pdf(Buffer.from(pdfBuffer));
 
-    // Combine the text content from all pages
-    const text = data.pages.map(page => page.content.map(item => item.str).join(' ')).join('\n');
-
-    return NextResponse.json({ text });
+    return NextResponse.json({ text: data?.text ?? '' });
   } catch (error: any) {
-    console.error('Error in PDF parsing helper:', error.message);
-    return new NextResponse(error.message, { status: 500 });
+    console.error('Error in PDF parsing route:', error);
+    return new NextResponse(error?.message ?? 'Unknown error', { status: 500 });
   }
 }
