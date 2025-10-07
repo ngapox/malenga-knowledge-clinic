@@ -6,28 +6,14 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import { Briefcase, BarChart2, TrendingUp } from "lucide-react";
 
-async function getPageData() {
-  console.log("--- [HOME PAGE] getPageData started ---");
+// This function now fetches only public data
+async function getPublicPageData() {
   const supabase = createSupabaseServerClient();
-  
   const baseUrl = process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000';
-  
-  const { data: { user } } = await supabase.auth.getUser();
-  if(user) {
-    console.log(`[HOME PAGE] User session FOUND. User ID: ${user.id}`);
-  } else {
-    console.log("[HOME PAGE] User session NOT FOUND.");
-  }
-  let userName: string | null = null;
-  if (user) {
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-    userName = profile?.full_name || null;
-  }
-  
+
   const summaryRes = await fetch(`${baseUrl}/api/daily-summary`, { cache: 'no-store' });
-  // Add a check in case the API fetch itself fails for network reasons
   const summary = summaryRes.ok ? await summaryRes.json() : {
       narrative: "Could not load market data.",
       marketStatus: { isOpen: false, text: "Market status unknown" },
@@ -41,15 +27,17 @@ async function getPageData() {
     .order('published_at', { ascending: false })
     .limit(3);
 
-  return { summary, articles: articles || [], userName };
+  return { summary, articles: articles || [] };
 }
 
 export default async function Home() {
-  const { summary, articles, userName } = await getPageData();
+  // Note: We no longer fetch userName here.
+  const { summary, articles } = await getPublicPageData();
 
   return (
     <div className="space-y-12">
-      <HomePageClient userName={userName} />
+      {/* HomePageClient now receives null, so it will show the sign-up buttons */}
+      <HomePageClient userName={null} />
       
       <MarketTicker data={summary.tickerData} />
 
@@ -93,7 +81,7 @@ export default async function Home() {
                   <CardHeader><CardTitle>{article.title}</CardTitle></CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground">
-                      Published on {new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      Published on {new Date(article.published_at!).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                     </p>
                   </CardContent>
                 </Card>
