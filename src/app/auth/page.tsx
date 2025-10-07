@@ -1,4 +1,3 @@
-// src/app/auth/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -24,29 +23,22 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSignIn = async () => {
-    console.log('--- [AUTH PAGE] handleSignIn started ---');
     setError(null);
     setLoading(true);
     
-    console.log('[AUTH PAGE] Step 1: Calling supabase.auth.signInWithPassword...');
     const { error } = await supabase.auth.signInWithPassword({
       phone: phone,
       password: password,
     });
 
     if (error) {
-      console.error('[AUTH PAGE] Step 2 FAILED: Supabase returned an error:', error);
       setError(error.message);
       setLoading(false);
     } else {
-      console.log('[AUTH PAGE] Step 2 SUCCESS: Sign-in successful.');
-      console.log('[AUTH PAGE] Step 3: Redirecting with full page reload to /');
-      // Using a full page reload is the most reliable way to ensure the server gets the new cookie
       window.location.href = '/';
     }
   };
 
-  // ... (the rest of the functions remain the same)
   const handleSendOtp = async () => {
     setError(null);
     setLoading(true);

@@ -1,5 +1,5 @@
 // src/lib/supabaseClient.ts
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr'
 
 // This file is used for client-side Supabase access.
 // Ensure environment variables are available in the browser.
@@ -10,6 +10,5 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase URL or Anon Key');
 }
 
-// --- 👇 CORRECTED CONFIGURATION IS HERE 👇 ---
-// persistSession is now true by default, which is what we want.
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Use createBrowserClient from @supabase/ssr for client-side instances
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey);
