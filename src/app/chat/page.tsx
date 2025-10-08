@@ -1,4 +1,3 @@
-// src/app/chat/page.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -34,7 +33,6 @@ export default function ChatPage() {
   const [mentionIndex, setMentionIndex] = useState(0);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Authentication and Room/Message fetching logic (remains the same)
   useEffect(() => {
     let mounted = true;
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -69,12 +67,23 @@ export default function ChatPage() {
   
   useEffect(() => {
     if (!activeRoom) { setMembers([]); return; }
-    (async () => {
-      const { data, error } = await supabase.from('room_members').select('user_id, profiles(full_name)').eq('room_id', activeRoom.id);
-      if (!error && data) {
+    
+    console.log(`--- [DEBUG] Fetching members for room: ${activeRoom.id} ---`);
+
+    const fetchMembers = async () => {
+      const { data, error } = await supabase
+        .from('room_members')
+        .select('user_id, profiles(full_name)')
+        .eq('room_id', activeRoom.id);
+      
+      if (error) {
+        console.error('[DEBUG] Error fetching members:', error);
+      } else {
+        console.log('[DEBUG] Successfully fetched members:', data);
         setMembers((data as any[]).map((row) => ({ user_id: row.user_id, profiles: Array.isArray(row.profiles) ? row.profiles[0] || null : row.profiles ?? null })));
       }
-    })();
+    };
+    fetchMembers();
   }, [activeRoom]);
   
   useEffect(() => {
@@ -132,12 +141,19 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Sending, Deleting, and Reaction logic (remains the same)
   const handleSend = async () => {
     if (!userId || !activeRoom || !text.trim()) return;
     setSendError(null);
+
+    console.log(`--- [DEBUG] Attempting to send message ---`);
+    console.log(`User ID: ${userId}`);
+    console.log(`Room ID: ${activeRoom.id}`);
+    console.log(`Content: ${text.trim()}`);
+
     const { error } = await supabase.from('messages').insert({ room_id: activeRoom.id, user_id: userId, content: text.trim() });
+    
     if (error) {
+      console.error('[DEBUG] Error sending message:', error);
       const msg = error.message.toLowerCase();
       if (msg.includes('policy') || msg.includes('violates row-level security')) {
         setSendError('You do not have permission to send messages in this room.');
@@ -146,6 +162,7 @@ export default function ChatPage() {
       }
       return;
     }
+    console.log('[DEBUG] Message sent successfully.');
     setText('');
     setMentionOpen(false);
   };
@@ -188,7 +205,6 @@ export default function ChatPage() {
     }
   };
   
-  // Mentions logic (remains the same)
   const memberOptions = useMemo(() => members.map(m => ({ id: m.user_id, label: m.profiles?.full_name?.trim() || `user-${m.user_id.slice(0, 6)}` })).sort((a, b) => a.label.localeCompare(b.label)), [members]);
   const findAtToken = (value: string, caret: number) => { const uptoCaret = value.slice(0, caret); const lastSpace = Math.max(uptoCaret.lastIndexOf(' '), uptoCaret.lastIndexOf('\n')); const token = uptoCaret.slice(lastSpace + 1); if (token.startsWith('@')) return { token, start: lastSpace + 1 }; return null; };
   const onTextChange: React.ChangeEventHandler<HTMLInputElement> = (e) => { const v = e.target.value; setText(v); setSendError(null); const caret = e.target.selectionStart ?? v.length; const at = findAtToken(v, caret); if (at) { const q = at.token.slice(1).toLowerCase(); setMentionQuery(q); setMentionOpen(true); setMentionIndex(0); } else { setMentionOpen(false); setMentionQuery(''); } };
@@ -197,14 +213,11 @@ export default function ChatPage() {
   const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => { if (!mentionOpen || filteredMentions.length === 0) return; if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => (i + 1) % filteredMentions.length); } else if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(i => (i - 1 + filteredMentions.length) % filteredMentions.length); } else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applyMention(filteredMentions[mentionIndex].label); } else if (e.key === 'Escape') { setMentionOpen(false); } };
   const renderWithMentions = (content: string) => content.split(/\s+/).map((w, i) => (w.startsWith('@') && w.length > 1) ? <span key={i} className="text-primary font-semibold">{w}</span> : <span key={i}>{w}</span>).reduce((acc: any[], el, i) => i ? [...acc, ' ', el] : [el], []);
 
-  // Conditional rendering for auth state
   if (loadingAuth) return <div className="p-6 text-center text-muted-foreground">Loading...</div>;
   if (!userId) return <div className="p-6 text-center">Please <a className="underline text-primary" href="/auth">sign in</a> to join the chat.</div>;
 
-  // New JSX for the redesigned UI
   return (
     <main className="grid grid-cols-1 md:grid-cols-[280px_1fr] h-[calc(100vh-10rem)] gap-6">
-      {/* Rooms Sidebar */}
       <aside className="bg-card border rounded-lg flex flex-col">
         <div className="p-4 font-bold border-b text-lg">Chatrooms</div>
         <ul className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -221,7 +234,6 @@ export default function ChatPage() {
         </ul>
       </aside>
 
-      {/* Main Chat Area */}
       <section className="bg-card border rounded-lg flex flex-col">
         {activeRoom ? (
           <>
