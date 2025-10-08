@@ -1,12 +1,37 @@
-// src/middleware.ts
+import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+
+// Define your languages and default language
+const supportedLngs = ['en', 'sw'];
+const fallbackLng = 'en';
+const cookieName = 'i18next';
 
 export async function middleware(req: NextRequest) {
+  // --- Language Detection Logic ---
+  let lng: string | undefined = req.cookies.get(cookieName)?.value;
+  if (!lng || !supportedLngs.includes(lng)) {
+    lng = fallbackLng;
+  }
+
+  const { pathname } = req.nextUrl;
+
+  // Redirect if the language is missing from the URL
+  const pathnameIsMissingLocale = supportedLngs.every(
+    (loc) => !pathname.startsWith(`/${loc}/`) && pathname !== `/${loc}`
+  );
+
+  if (pathnameIsMissingLocale) {
+    // e.g., incoming request is /dashboard, redirect to /en/dashboard
+    return NextResponse.redirect(
+      new URL(`/${lng}${pathname.startsWith('/') ? '' : '/'}${pathname}`, req.url)
+    );
+  }
+  // --- End of Language Logic ---
+
+
+  // --- The rest of your existing Supabase middleware logic ---
   let res = NextResponse.next({
-    request: {
-      headers: new Headers(req.headers),
-    },
+    request: { headers: new Headers(req.headers) },
   });
 
   const supabase = createServerClient(
@@ -30,30 +55,15 @@ export async function middleware(req: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  const { pathname } = req.nextUrl;
 
-  // --- 👇 NEW LOGIC IS HERE 👇 ---
-  // If user is logged in and tries to access the root page, redirect to dashboard
-  if (user && pathname === '/') {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
+  // Your existing redirect logic
+  if (user && pathname.endsWith('/')) {
+      return NextResponse.redirect(new URL(`/${lng}/dashboard`, req.url));
   }
-
-  // If user is not logged in and tries to access dashboard, redirect to home
-  if (!user && pathname === '/dashboard') {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
-  // --- 👆 END OF NEW LOGIC 👆 ---
-
-
-  if (user && pathname !== '/auth/complete-profile') {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, phone_e164')
-      .eq('id', user.id)
-      .single();
-
+  if (user && !pathname.includes('/auth/complete-profile')) {
+    const { data: profile } = await supabase.from('profiles').select('full_name, phone_e164').eq('id', user.id).single();
     if (!profile || !profile.full_name || !profile.phone_e164) {
-      return NextResponse.redirect(new URL('/auth/complete-profile', req.url));
+      return NextResponse.redirect(new URL(`/${lng}/auth/complete-profile`, req.url));
     }
   }
 
@@ -61,18 +71,8 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
+  // Matcher ignoring `_next/` and static files
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - auth (authentication routes)
-     * - api (API routes)
-     *
-     * We've added '/' to the matcher to ensure the root path is checked.
-     */
-    '/((?!_next/static|_next/image|favicon.ico|auth|api).*)',
-    '/',
+    '/((?!api|_next/static|_next/image|assets|favicon.ico|sw.js).*)',
   ],
 };

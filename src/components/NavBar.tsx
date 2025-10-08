@@ -1,32 +1,55 @@
-// src/components/NavBar.tsx
+'use client';
+
 import Link from "next/link";
 import { ThemeToggle } from "./ThemeToggle";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabase } from "@/lib/supabaseClient";
 import LogoutButton from "./LogoutButton";
 import { Button } from "./ui/button";
+import { useTranslation } from 'react-i18next';
+import { useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 
-export default async function NavBar() {
-  console.log("--- [NAVBAR] Rendering ---");
-  const supabase = createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if(user) {
-    console.log(`[NAVBAR] User session FOUND. User ID: ${user.id}`);
-  } else {
-    console.log("[NAVBAR] User session NOT FOUND.");
-  }
+export default function NavBar() {
+  const { t } = useTranslation('common');
+  const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // --- 👇 NEW: Fetch the user's profile to check for admin status 👇 ---
-  let isAdmin = false;
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', user.id)
-      .single();
-    if (profile) {
-      isAdmin = profile.is_admin;
-    }
-  }
+  useEffect(() => {
+    const fetchUser = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+
+        if (currentUser) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('is_admin')
+              .eq('id', currentUser.id)
+              .single();
+            if (profile) setIsAdmin(profile.is_admin);
+        }
+        setLoading(false);
+    };
+
+    fetchUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+            supabase.from('profiles').select('is_admin').eq('id', currentUser.id).single().then(({data}) => {
+                if(data) setIsAdmin(data.is_admin);
+            });
+        } else {
+            setIsAdmin(false);
+        }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -35,25 +58,26 @@ export default async function NavBar() {
           Malenga
         </Link>
         <div className="flex items-center gap-4 text-sm font-medium">
-          {user ? (
+          {loading ? (
+            <div className="h-8 w-24 animate-pulse rounded-md bg-muted"></div>
+          ) : user ? (
             <>
-              {/* --- 👇 NEW: Conditionally render the Admin link 👇 --- */}
               {isAdmin && (
                 <Link href="/admin" className="font-bold text-primary transition-colors hover:text-primary/80">
-                  Admin
+                  {t('nav_admin')}
                 </Link>
               )}
               <Link href="/watchlist" className="text-muted-foreground transition-colors hover:text-primary">
-                Watchlist
+                {t('nav_watchlist')}
               </Link>
               <Link href="/calculators/bond" className="text-muted-foreground transition-colors hover:text-primary">
-                Bond Calculator
+                {t('nav_bond_calculator')}
               </Link>
               <Link href="/chat" className="text-muted-foreground transition-colors hover:text-primary">
-                Chat
+                {t('nav_chat')}
               </Link>
               <Link href="/profile" className="text-muted-foreground transition-colors hover:text-primary">
-                Profile
+                {t('nav_profile')}
               </Link>
               <LogoutButton />
             </>

@@ -62,20 +62,16 @@ export default function ChatPage() {
       if (!error && data) {
         setRooms(data as Room[]);
         if (data.length > 0) {
-          // --- V THIS IS THE CORRECTED LINE V ---
           const beginnersLounge = data.find((r: Room) => r.name.toLowerCase().includes('beginner'));
-          // --- ^ END OF CORRECTION ^ ---
           setActiveRoom(beginnersLounge || data[0] as Room);
         }
       }
     })();
-  }, []); 
+  }, []);
   
   useEffect(() => {
     if (!activeRoom) { setMembers([]); return; }
     
-    console.log(`--- [DEBUG] Fetching members for room: ${activeRoom.id} ---`);
-
     const fetchMembers = async () => {
       const { data, error } = await supabase
         .from('room_members')
@@ -83,9 +79,8 @@ export default function ChatPage() {
         .eq('room_id', activeRoom.id);
       
       if (error) {
-        console.error('[DEBUG] Error fetching members:', error);
+        console.error('Error fetching members:', error);
       } else {
-        console.log('[DEBUG] Successfully fetched members:', data);
         setMembers((data as any[]).map((row) => ({ user_id: row.user_id, profiles: Array.isArray(row.profiles) ? row.profiles[0] || null : row.profiles ?? null })));
       }
     };
@@ -151,15 +146,10 @@ export default function ChatPage() {
     if (!userId || !activeRoom || !text.trim()) return;
     setSendError(null);
 
-    console.log(`--- [DEBUG] Attempting to send message ---`);
-    console.log(`User ID: ${userId}`);
-    console.log(`Room ID: ${activeRoom.id}`);
-    console.log(`Content: ${text.trim()}`);
-
     const { error } = await supabase.from('messages').insert({ room_id: activeRoom.id, user_id: userId, content: text.trim() });
     
     if (error) {
-      console.error('[DEBUG] Error sending message:', error);
+      console.error('Error sending message:', error);
       const msg = error.message.toLowerCase();
       if (msg.includes('policy') || msg.includes('violates row-level security')) {
         setSendError('You do not have permission to send messages in this room.');
@@ -168,7 +158,7 @@ export default function ChatPage() {
       }
       return;
     }
-    console.log('[DEBUG] Message sent successfully.');
+
     setText('');
     setMentionOpen(false);
   };
@@ -327,7 +317,7 @@ export default function ChatPage() {
                   <Send className="w-5 h-5" />
                 </Button>
               </form>
-              {sendError && <div className="mt-2 text-sm text-destructive">{sendError}</div>}
+              {sendError && <div className="mt-2 text-sm text-muted-foreground">{sendError}</div>}
             </div>
           </>
         ) : (
