@@ -8,6 +8,7 @@ import { Button } from "./ui/button";
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 export default function NavBar() {
   const { t } = useTranslation('common');
@@ -86,7 +87,10 @@ export default function NavBar() {
               <Button size="sm">Login</Button>
             </Link>
           )}
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </nav>
