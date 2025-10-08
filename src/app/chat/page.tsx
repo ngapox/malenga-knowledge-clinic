@@ -57,13 +57,19 @@ export default function ChatPage() {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from('rooms').select('*').order('name');
+      const { data, error } = await supabase.rpc('get_user_rooms');
+
       if (!error && data) {
         setRooms(data as Room[]);
-        if (!activeRoom && data.length > 0) setActiveRoom(data[0] as Room);
+        if (data.length > 0) {
+          // --- V THIS IS THE CORRECTED LINE V ---
+          const beginnersLounge = data.find((r: Room) => r.name.toLowerCase().includes('beginner'));
+          // --- ^ END OF CORRECTION ^ ---
+          setActiveRoom(beginnersLounge || data[0] as Room);
+        }
       }
     })();
-  }, []);
+  }, []); 
   
   useEffect(() => {
     if (!activeRoom) { setMembers([]); return; }
