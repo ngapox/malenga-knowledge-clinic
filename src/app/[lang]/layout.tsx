@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "../globals.css"; // Note the path change
+import "../globals.css"; // This path is now correct
 import { ThemeProvider } from "@/components/ThemeProvider";
 import NavBar from "@/components/NavBar";
 import TranslationsProvider from "@/components/TranslationsProvider";
