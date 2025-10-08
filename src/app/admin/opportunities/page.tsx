@@ -1,4 +1,3 @@
-// src/app/admin/opportunities/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -29,7 +28,7 @@ export default function AdminOpportunitiesPage() {
   const [content, setContent] = useState('');
   const [type, setType] = useState('BOND');
   const [actionDate, setActionDate] = useState('');
-  const [file, setFile] = useState<File | null>(null); // <-- Add state for the file
+  const [file, setFile] = useState<File | null>(null);
   
   const [isSaving, setIsSaving] = useState(false);
 
@@ -56,9 +55,14 @@ export default function AdminOpportunitiesPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // --- 👇 NEW: LOG STATEMENTS FOR DEBUGGING 👇 ---
+    console.log("--- DEBUGGING UPLOAD ---");
+    console.log("Supabase URL being used:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log("Supabase Anon Key being used:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+    // --- 👆 END OF LOG STATEMENTS 👆 ---
+
     let pdfPublicUrl = null;
 
-    // --- 👇 NEW: File Upload Logic 👇 ---
     if (file) {
       const filePath = `public/${Date.now()}-${file.name}`;
       const { error: uploadError } = await supabase.storage
@@ -66,7 +70,8 @@ export default function AdminOpportunitiesPage() {
         .upload(filePath, file);
 
       if (uploadError) {
-        alert(`Error uploading file: ${uploadError.message}`);
+        // We will now see this alert on the live site if the bucket isn't found
+        alert(`Error during upload: ${uploadError.message}`);
         setIsSaving(false);
         return;
       }
@@ -76,8 +81,8 @@ export default function AdminOpportunitiesPage() {
         .getPublicUrl(filePath);
 
       pdfPublicUrl = urlData.publicUrl;
+      console.log("Generated PDF Public URL:", pdfPublicUrl);
     }
-    // --- 👆 End of File Upload Logic 👆 ---
 
     const payload = {
       title,
@@ -85,21 +90,18 @@ export default function AdminOpportunitiesPage() {
       opportunity_type: type,
       action_date: actionDate || null,
       created_by: user.id,
-      pdf_url: pdfPublicUrl, // <-- Save the new URL to the database
+      pdf_url: pdfPublicUrl,
     };
 
     const { error } = await supabase.from('opportunities').insert(payload);
     if (error) {
       alert(error.message);
     } else {
-      // Reset form
       setTitle('');
       setContent('');
       setType('BOND');
       setActionDate('');
       setFile(null);
-      // NOTE: We need to reset the file input visually, which is tricky.
-      // This is a common workaround by giving the input a key that changes.
       (document.getElementById('pdf-upload') as HTMLInputElement).value = "";
       loadOpportunities();
     }
@@ -109,9 +111,9 @@ export default function AdminOpportunitiesPage() {
   if (loading) return <div>Loading...</div>;
 
   return (
+    // ... JSX remains the same ...
     <main className="mx-auto max-w-4xl p-6 space-y-8">
       <h1 className="text-3xl font-bold">Manage Opportunities</h1>
-      
       <div className="bg-card border rounded-lg p-6 space-y-4">
         <h2 className="text-xl font-semibold">Create New Opportunity</h2>
         <Input placeholder="Opportunity Title" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -132,8 +134,6 @@ export default function AdminOpportunitiesPage() {
           </div>
         </div>
         <Textarea placeholder="Details about the opportunity..." value={content} onChange={(e) => setContent(e.target.value)} rows={6} />
-
-        {/* --- 👇 NEW: File Input Field 👇 --- */}
         <div>
             <Label htmlFor="pdf-upload">Attach PDF (Optional)</Label>
             <Input 
@@ -144,13 +144,10 @@ export default function AdminOpportunitiesPage() {
               onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} 
             />
         </div>
-        {/* --- 👆 End of File Input Field 👆 --- */}
-
         <div className="flex gap-4">
           <Button onClick={handleSave} disabled={isSaving}>{isSaving ? 'Posting...' : 'Post Opportunity'}</Button>
         </div>
       </div>
-
       <div className="bg-card border rounded-lg p-6">
         <h2 className="text-xl font-semibold mb-4">Posted Opportunities</h2>
         <ul className="space-y-2">
