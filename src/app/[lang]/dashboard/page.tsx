@@ -43,7 +43,7 @@ type HotRoom = {
     recent_message_count: number;
     rooms: { 
         name: string | null;
-    }[]; 
+    } | null; // It's a single object that could be null
 };
 
 async function getDashboardData() {
@@ -224,7 +224,7 @@ export default async function DashboardPage() {
                     {hotRooms.map(room => (
                         <li key={room.room_id}>
                             <Link href="/chat" className="flex justify-between items-center p-2 rounded-md hover:bg-muted">
-                                <span className="font-semibold text-primary"># {room.rooms[0]?.name || 'Unknown Room'}</span>
+                                <span className="font-semibold text-primary"># {room.rooms?.name || 'Unknown Room'}</span>
                                 <span className="text-sm font-bold text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">{room.recent_message_count}</span>
                             </Link>
                         </li>
