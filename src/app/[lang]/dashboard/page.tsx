@@ -51,19 +51,33 @@ async function getDashboardData() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { redirect('/auth'); }
 
+  // --- LOGGING: Announce the start of the data fetching process ---
+  console.log("\n--- [getDashboardData] Starting to fetch dashboard data ---");
+
   const profilePromise = supabase.from('profiles').select('full_name').eq('id', user.id).single();
   const articlesPromise = supabase.from('articles').select('id, title').not('published_at', 'is', null).order('published_at', { ascending: false }).limit(3);
   const opportunitiesPromise = supabase.from('opportunities').select('id, title, opportunity_type, action_date, pdf_url').order('created_at', { ascending: false }).limit(3);
   const watchlistPromise = supabase.from('watchlist_items').select('symbol').eq('user_id', user.id).limit(5);
   const userProgressPromise = supabase.from('user_progress').select('path_id, completed_step').eq('user_id', user.id).single();
+  
+  // --- LOGGING: Log the exact query being sent for hot rooms ---
+  console.log("[getDashboardData] Step 1: Preparing to query 'room_activity' with a join on 'rooms(name)'.");
   const hotRoomsPromise = supabase.from('room_activity').select(`room_id, recent_message_count, rooms(name)`).order('recent_message_count', { ascending: false }).limit(3);
 
   const [
-    { data: profile }, { data: articles }, { data: opportunities }, { data: userWatchlist }, { data: userProgress }, { data: hotRooms }
+    { data: profile }, { data: articles }, { data: opportunities }, { data: userWatchlist }, { data: userProgress }, { data: hotRooms, error: hotRoomsError } // Capture the error object
   ] = await Promise.all([
     profilePromise, articlesPromise, opportunitiesPromise, watchlistPromise, userProgressPromise, hotRoomsPromise
   ]);
-
+  
+  // --- LOGGING: Log the raw result of the hot rooms query ---
+  console.log("[getDashboardData] Step 2: Received response from 'room_activity' query.");
+  if (hotRoomsError) {
+    console.error("[getDashboardData] ERROR FETCHING HOT ROOMS:", hotRoomsError);
+  } else {
+    console.log("[getDashboardData] Raw 'hotRooms' data:", JSON.stringify(hotRooms, null, 2));
+  }
+  
   let currentPath: LearningPath | null = null;
   let nextArticle: NextArticle | null = null;
 
@@ -103,6 +117,9 @@ async function getDashboardData() {
     }));
   }
 
+  // --- LOGGING: Announce the end of the process ---
+  console.log("[getDashboardData] Finished data processing. Returning data to component.");
+
   return {
     userName: profile?.full_name,
     articles: (articles as Article[]) || [],
@@ -114,6 +131,7 @@ async function getDashboardData() {
     hotRooms: (hotRooms as any[] as HotRoom[]) || [],
   };
 }
+
 
 export default async function DashboardPage() {
   const { userName, articles, opportunities, watchlistItems, currentPath, nextArticle, userProgress, hotRooms } = await getDashboardData();
