@@ -56,10 +56,12 @@ export async function middleware(req: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Your existing redirect logic
-  if (user && pathname.endsWith('/')) {
+  // --- 👇 THIS IS THE CORRECTED REDIRECT LOGIC 👇 ---
+  if (user && (pathname === `/${lng}` || pathname === `/${lng}/`)) {
       return NextResponse.redirect(new URL(`/${lng}/dashboard`, req.url));
   }
+  // --- 👆 END OF CORRECTION 👆 ---
+  
   if (user && !pathname.includes('/auth/complete-profile')) {
     const { data: profile } = await supabase.from('profiles').select('full_name, phone_e164').eq('id', user.id).single();
     if (!profile || !profile.full_name || !profile.phone_e164) {
