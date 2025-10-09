@@ -111,7 +111,7 @@ async function getDashboardData() {
     currentPath,
     nextArticle,
     userProgress: userProgress ? { ...userProgress, total_steps: currentPath?.path_articles.length || 0 } : null,
-    hotRooms: (hotRooms as HotRoom[]) || [],
+    hotRooms: (hotRooms as any[] as HotRoom[]) || [],
   };
 }
 
